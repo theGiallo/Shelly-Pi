@@ -21,4 +21,12 @@ jobs:
             requirements.txt
             requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      - run: python -m pytest -q
+      - name: Run the tests
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest -q -rfE --tb=short 2>&1 | tee pytest.log || {
+            # copy the failures into the run's annotations, which are easy to read without opening the logs
+            grep -E "^(FAILED|ERROR)|Error" pytest.log | head -15 | while IFS= read -r l; do echo "::error::${l:0:250}"; done
+            exit 1
+          }
