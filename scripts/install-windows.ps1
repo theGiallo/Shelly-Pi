@@ -46,7 +46,10 @@ $Cache = Join-Path $env:LOCALAPPDATA "Shelly-Pi\cache"
 New-Item -ItemType Directory -Force -Path $Cache | Out-Null
 
 function Get-Text([string]$url) {
-  return (Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction Stop).Content
+  $c = (Invoke-WebRequest -UseBasicParsing -Uri $url -ErrorAction Stop).Content
+  # files without a text content type (like the CHECKSUM file) come back as bytes
+  if ($c -is [byte[]]) { $c = [System.Text.Encoding]::UTF8.GetString($c) }
+  return [string]$c
 }
 
 function Get-File([string]$url, [string]$dest) {
