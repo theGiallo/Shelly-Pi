@@ -325,3 +325,7 @@ scripts/        demo.py (try it on your PC), build-image.sh, prepare-sd.sh (prep
 tests/          pytest suite and a simulated Shelly Gen3 plug
 Containerfile   one image for both containers
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE). The bundled uPlot chart library (`app/static/vendor/`) is MIT-licensed too; its own licence file sits next to it.
