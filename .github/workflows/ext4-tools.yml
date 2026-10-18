@@ -30,24 +30,29 @@ jobs:
           msystem: MSYS
           update: true
 
-      - name: Install e2fsprogs
+      - name: Build e2fsprogs (MSYS2 has no package for it)
         shell: msys2 {0}
         run: |
-          if ! pacman -S --noconfirm --needed e2fsprogs > pacman.log 2>&1; then
-            echo "::error::pacman failed: $(tr '\n' '|' < pacman.log | cut -c1-900) SEARCH: $(pacman -Ss e2fs | tr '\n' '|' | cut -c1-600)"
+          pacman -S --noconfirm --needed base-devel gcc make git > pacman.log 2>&1 || { echo "::error::pacman failed: $(tail -c 600 pacman.log | tr '\n' '|')"; exit 1; }
+          git clone --depth 1 --branch v1.47.2 https://github.com/tytso/e2fsprogs.git src
+          cd src
+          if ! ( ./configure --prefix=/usr/local --disable-nls --disable-fuse2fs --disable-defrag --disable-uuidd --disable-e2initrd-helper --without-libarchive > ../configure.log 2>&1 && make -j4 > ../make.log 2>&1 ); then
+            echo "::error::build failed: configure: $(tail -c 500 ../configure.log | tr '\n' '|') MAKE: $(grep -m3 -i 'error' ../make.log | cut -c1-300 | tr '\n' '|') TAIL: $(tail -c 700 ../make.log | tr '\n' '|')"
             exit 1
           fi
+          make install > ../install.log 2>&1 || true
+          ls -l /usr/local/sbin /usr/local/bin | head -30
 
       - name: Collect debugfs.exe and the libraries it needs
         shell: msys2 {0}
         run: |
           mkdir -p out/ext4-tools
-          cp /usr/bin/debugfs.exe out/ext4-tools/
-          for dll in $(ldd /usr/bin/debugfs.exe | awk '/\/usr\/bin\// {print $3}'); do cp "$dll" out/ext4-tools/; done
-          cp /usr/bin/mke2fs.exe out/mke2fs.exe
-          for dll in $(ldd /usr/bin/mke2fs.exe | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/; done
-          cp /usr/bin/e2fsck.exe out/e2fsck.exe
-          for dll in $(ldd /usr/bin/e2fsck.exe | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/; done
+          cp /usr/local/sbin/debugfs.exe out/ext4-tools/
+          for dll in $(ldd /usr/local/sbin/debugfs.exe | awk '/\/usr\/bin\// {print $3}'); do cp "$dll" out/ext4-tools/; done
+          cp /usr/local/sbin/mke2fs.exe out/mke2fs.exe
+          for dll in $(ldd /usr/local/sbin/mke2fs.exe | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/; done
+          cp /usr/local/sbin/e2fsck.exe out/e2fsck.exe
+          for dll in $(ldd /usr/local/sbin/e2fsck.exe | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/; done
           cp out/ext4-tools/*.dll out/ 2>/dev/null || true
           ls -l out out/ext4-tools
 
