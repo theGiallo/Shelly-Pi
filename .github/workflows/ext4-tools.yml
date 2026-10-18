@@ -105,7 +105,7 @@ jobs:
           $n = $d.Number
           $p = Get-Partition -DiskNumber $n | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
           Write-Host "disk $n partition offset $($p.Offset) size $($p.Size)"
-          $target = "//./PhysicalDrive$n?offset=$($p.Offset)"
+          $target = "//./PhysicalDrive${n}?offset=$($p.Offset)"
           function Warnout($label, $text) { Write-Host ("::warning::" + $label + ": " + (($text -join " | ") -replace "[\r\n]+", " | ")) }
           # make an ext4 filesystem inside that partition, then add the key, as the installer does on the card
           $kb = [int]($p.Size / 1024 - 64)
