@@ -263,6 +263,47 @@ Note "Copied to ~/Shelly-Pi on the Pi."
 
 # ---- 6. the container image -----------------------------------------------------------------------------------------
 
+function Get-File([string]$url, [string]$dest) {
+  $part = "$dest.part"
+  if (Test-Path $part) { Remove-Item -Force $part }
+  $req = [System.Net.HttpWebRequest]::Create($url)
+  $req.UserAgent = "Shelly-Pi-installer"
+  $req.AllowAutoRedirect = $true
+  $req.ReadWriteTimeout = 60000
+  $resp = $req.GetResponse()
+  $total = $resp.ContentLength
+  $in = $resp.GetResponseStream()
+  $out = [System.IO.File]::Create($part)
+  try {
+    $buf = New-Object byte[] (1024 * 1024)
+    [long]$done = 0
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastShown = -1
+    while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+      $out.Write($buf, 0, $n)
+      $done += $n
+      $sec = [int]$clock.Elapsed.TotalSeconds
+      if ($sec -ne $lastShown) {
+        $lastShown = $sec
+        $mb = [math]::Round($done / 1MB)
+        $speed = if ($clock.Elapsed.TotalSeconds -gt 0) { [math]::Round($done / 1MB / $clock.Elapsed.TotalSeconds, 1) } else { 0 }
+        if ($total -gt 0) {
+          $pct = [math]::Floor($done * 100 / $total)
+          Write-Host ("`r    {0} of {1} MB ({2}%)  {3} MB/s   " -f $mb, [math]::Round($total / 1MB), $pct, $speed) -NoNewline
+        } else {
+          Write-Host ("`r    {0} MB  {1} MB/s   " -f $mb, $speed) -NoNewline
+        }
+      }
+    }
+    Write-Host ""
+  } finally {
+    $out.Close(); $in.Close(); $resp.Close()
+  }
+  if ($total -gt 0 -and (Get-Item $part).Length -ne $total) { Remove-Item -Force $part; throw "the download stopped early" }
+  Move-Item -Force $part $dest
+}
+
+
 Say "Container image"
 $image = ""
 if ($BuildOnPi) {
@@ -284,7 +325,7 @@ if ($BuildOnPi) {
     $ProgressPreference = "SilentlyContinue"   # the progress bar makes downloads in Windows PowerShell very slow
     Note "Downloading the image from the newest release of $Repo (about 180 MB) ..."
     Invoke-WebRequest -UseBasicParsing -Uri "$base/shelly-pi-image.tar.sha256" -OutFile $sum -ErrorAction Stop
-    Invoke-WebRequest -UseBasicParsing -Uri "$base/shelly-pi-image.tar" -OutFile $tar -ErrorAction Stop
+    Get-File "$base/shelly-pi-image.tar" $tar
     $want = ((Get-Content -Raw $sum).Trim() -split "\s+")[0].ToLower()
     $have = (Get-FileHash -Algorithm SHA256 $tar -ErrorAction Stop).Hash.ToLower()
     if ($want -ne $have) { throw "the download is damaged (checksum differs)" }

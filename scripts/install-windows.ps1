@@ -52,17 +52,40 @@ function Get-Text([string]$url) {
 function Get-File([string]$url, [string]$dest) {
   $part = "$dest.part"
   if (Test-Path $part) { Remove-Item -Force $part }
-  $done = $false
+  $req = [System.Net.HttpWebRequest]::Create($url)
+  $req.UserAgent = "Shelly-Pi-installer"
+  $req.AllowAutoRedirect = $true
+  $req.ReadWriteTimeout = 60000
+  $resp = $req.GetResponse()
+  $total = $resp.ContentLength
+  $in = $resp.GetResponseStream()
+  $out = [System.IO.File]::Create($part)
   try {
-    if (Get-Command Start-BitsTransfer -ErrorAction SilentlyContinue) {
-      Start-BitsTransfer -Source $url -Destination $part -DisplayName "Shelly-Pi download" -ErrorAction Stop
-      $done = $true
+    $buf = New-Object byte[] (1024 * 1024)
+    [long]$done = 0
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastShown = -1
+    while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+      $out.Write($buf, 0, $n)
+      $done += $n
+      $sec = [int]$clock.Elapsed.TotalSeconds
+      if ($sec -ne $lastShown) {
+        $lastShown = $sec
+        $mb = [math]::Round($done / 1MB)
+        $speed = if ($clock.Elapsed.TotalSeconds -gt 0) { [math]::Round($done / 1MB / $clock.Elapsed.TotalSeconds, 1) } else { 0 }
+        if ($total -gt 0) {
+          $pct = [math]::Floor($done * 100 / $total)
+          Write-Host ("`r    {0} of {1} MB ({2}%)  {3} MB/s   " -f $mb, [math]::Round($total / 1MB), $pct, $speed) -NoNewline
+        } else {
+          Write-Host ("`r    {0} MB  {1} MB/s   " -f $mb, $speed) -NoNewline
+        }
+      }
     }
-  } catch { Warn "The Windows background transfer service didn't work ($($_.Exception.Message)); trying a plain download." }
-  if (-not $done) {
-    $wc = New-Object System.Net.WebClient
-    $wc.DownloadFile($url, $part)
+    Write-Host ""
+  } finally {
+    $out.Close(); $in.Close(); $resp.Close()
   }
+  if ($total -gt 0 -and (Get-Item $part).Length -ne $total) { Remove-Item -Force $part; throw "the download stopped early" }
   Move-Item -Force $part $dest
 }
 
@@ -153,7 +176,7 @@ function Get-FedoraImage {
     Note "Already downloaded and checked."
     return $dest
   }
-  Note "Downloading (about 1 GB; a progress bar may appear) ..."
+  Note "Downloading (about 1 GB) ..."
   try {
     Get-File $url $dest
   } catch {
