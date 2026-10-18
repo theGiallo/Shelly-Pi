@@ -157,21 +157,32 @@ Note "SSH key: $KeyFile"
 # ---- 2. find the Pi ----------------------------------------------------------------------------------
 
 Say "Looking for the Pi"
-if (-not $PiHost) {
-  foreach ($name in @("fedora.local", "shellypi.local")) {
-    Note "Trying $name ..."
-    if (Test-Port $name 22 2500) { $PiHost = $name; break }
+$tries = 0
+while ($true) {
+  $tries++
+  if (-not $PiHost) {
+    foreach ($name in @("fedora.local", "shellypi.local", "localhost.local")) {
+      Note "Trying $name ..."
+      if (Test-Port $name 22 2500) { $PiHost = $name; break }
+    }
   }
-}
-if (-not $PiHost -or -not (Test-Port $PiHost 22 4000)) {
+  if ($PiHost -and (Test-Port $PiHost 22 4000)) { break }
   if ($PiHost) { Warn "$PiHost doesn't answer on the SSH port." }
-  if ($Yes) { Die "Couldn't find the Pi. Pass its address with -PiHost (look in your router's device list)." }
-  Note "I couldn't find it by name. Look in your router's list of devices for the Pi's address."
-  $PiHost = (Read-Host "Address of the Pi (for example 192.168.1.50)").Trim()
-  if (-not $PiHost) { Die "No address given." }
-  if (-not (Test-Port $PiHost 22 6000)) {
-    Die "Nothing answers at $PiHost on the SSH port (22). Is the Pi on Ethernet and fully booted? A card that hasn't finished its first-boot setup doesn't accept SSH."
+  if ($Yes) {
+    if ($tries -lt 12) { Note "Waiting 15 seconds, then trying again ..."; Start-Sleep -Seconds 15; continue }
+    Die "Couldn't find the Pi. Pass its address with -PiHost (look in your router's device list)."
   }
+  Write-Host ""
+  Write-Host "  The Pi may still be starting (the first start takes a couple of minutes), or it may have a different"
+  Write-Host "  address now. Look in your router's list of devices for it."
+  Write-Host "    [Enter]        try again with the same address"
+  Write-Host "    an address     try that one instead (for example 192.168.1.50)"
+  Write-Host "    q              stop"
+  $ans = (Read-Host "Address of the Pi$(if ($PiHost) { " [$PiHost]" })").Trim()
+  if ($ans -match "^[qQ]$") { Die "Stopped. Start install.cmd -SkipSd again when the Pi is up (add -PiHost <address> if needed)." }
+  if ($ans) { $PiHost = $ans }
+  elseif (-not $PiHost) { continue }
+  if ($PiHost) { Note "Trying $PiHost ..." }
 }
 Note "Found it at $PiHost."
 $Target = "$User@$PiHost"
