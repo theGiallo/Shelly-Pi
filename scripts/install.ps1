@@ -303,9 +303,14 @@ if ($code -ne 0) { Warn "Couldn't check the card's free space (continuing). If t
 Say "Copying the project to the Pi"
 $tmpTgz = Join-Path ([System.IO.Path]::GetTempPath()) "shelly-pi-src.tgz"
 if (Test-Path $tmpTgz) { Remove-Item -Force $tmpTgz }
-& tar -czf $tmpTgz --exclude=.git --exclude=.venv --exclude=venv --exclude=demo-data --exclude=__pycache__ `
+# GNU tar (from Git for Windows, say) reads "C:" in an output path as a host name, so pack from the temp folder
+# using a plain file name.
+Push-Location ([System.IO.Path]::GetTempPath())
+& tar -czf shelly-pi-src.tgz --exclude=.git --exclude=.venv --exclude=venv --exclude=demo-data --exclude=__pycache__ `
   --exclude=.pytest_cache --exclude=node_modules --exclude=*.tar --exclude=*.tar.gz --exclude=*credentials*.txt -C $Root .
-if ($LASTEXITCODE -ne 0) { Die "Couldn't pack the project folder." }
+$packCode = $LASTEXITCODE
+Pop-Location
+if ($packCode -ne 0) { Die "Couldn't pack the project folder." }
 & scp @SshOpts $tmpTgz "${Target}:/tmp/shelly-pi-src.tgz"
 if ($LASTEXITCODE -ne 0) { Die "Couldn't copy the project to the Pi." }
 # Files that left Windows with CRLF line endings would not run on the Pi, so fix those while unpacking.
