@@ -30,6 +30,7 @@
     $("#ap-pass").dataset.value = sys.ap.password || "";
     if (!sys.ap.password) { $("#ap-pass").textContent = "No password set"; $("#ap-show").hidden = true; }
 
+    $("#up-version").textContent = sys.version;
     $("#qr-apwifi").src = "/api/wizard/qr.svg?kind=apwifi&t=" + Date.now();
     $("#qr-dash").src = "/api/wizard/qr.svg?kind=dashboard";
 
@@ -325,6 +326,110 @@
       $("#bk-result").textContent = err.message;
       toast(err.message);
       btn.disabled = false;
+    }
+  });
+
+  // ---- updating the app ---------------------------------------------------------------------------
+
+  const REPO = "theGiallo/Shelly-Pi";
+  const IMAGE_ASSET = "shelly-pi-image.tar";
+  let release = null; // { tag, size, sha256, url }
+  const upFile = $("#up-file"), upSha = $("#up-sha"), upSend = $("#up-send");
+  const normVersion = (v) => String(v || "").trim().replace(/^v/i, "");
+  const upReady = () => { upSend.disabled = !(upFile.files[0] && /^[0-9a-f]{64}$/.test(upSha.value.trim().toLowerCase())); };
+  upFile.addEventListener("change", () => {
+    const f = upFile.files[0];
+    $("#up-result").textContent = f && release && f.size !== release.size
+      ? `This file is ${fmt.bytes(f.size)} but the release's is ${fmt.bytes(release.size)}. The download may be incomplete.` : "";
+    upReady();
+  });
+  upSha.addEventListener("input", upReady);
+
+  $("#up-check").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    $("#up-found").textContent = "Asking GitHub…";
+    try {
+      let res;
+      try { res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=10`, { headers: { Accept: "application/vnd.github+json" } }); }
+      catch (err) { throw new Error("Couldn't reach GitHub. This device needs internet for that (the Pi doesn't). You can also paste the checksum below and pick a file you already have."); }
+      if (!res.ok) throw new Error(`GitHub answered ${res.status}.`);
+      const list = await res.json();
+      const rel = list.find((r) => !r.draft && (r.assets || []).some((a) => a.name === IMAGE_ASSET));
+      if (!rel) throw new Error("No release with an app image was found.");
+      const a = rel.assets.find((x) => x.name === IMAGE_ASSET);
+      release = { tag: rel.tag_name, size: a.size, sha256: String(a.digest || "").replace(/^sha256:/, ""), url: a.browser_download_url };
+      const same = normVersion(rel.tag_name) === normVersion(sys && sys.version);
+      $("#up-found").textContent = same
+        ? `You have the newest version (${rel.tag_name}). You can still install it again.`
+        : `Version ${rel.tag_name} is available (${fmt.bytes(a.size)}).`;
+      $("#up-download").href = release.url;
+      upSha.value = release.sha256;
+      $("#up-offer").hidden = false;
+      upReady();
+    } catch (err) {
+      $("#up-found").textContent = err.message;
+      $("#up-offer").hidden = false;
+    } finally { btn.disabled = false; }
+  });
+
+  function sendUpdate(file, sha) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/update?sha256=${encodeURIComponent(sha)}`);
+      xhr.setRequestHeader("X-Requested-With", "shelly-pi");
+      xhr.setRequestHeader("Content-Type", "application/x-tar");
+      xhr.upload.onprogress = (ev) => {
+        if (!ev.lengthComputable) return;
+        $("#up-bar").value = (ev.loaded / ev.total) * 100;
+        $("#up-result").textContent = `Sending to the Pi: ${fmt.bytes(ev.loaded)} of ${fmt.bytes(ev.total)}`;
+      };
+      xhr.onerror = () => reject(new Error("Can't reach the Pi. Check the network connection."));
+      xhr.onload = () => {
+        let data = null;
+        try { data = JSON.parse(xhr.responseText); } catch (err) { /* not JSON */ }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(new Error((data && typeof data.detail === "string" && data.detail) || `Request failed (${xhr.status})`));
+      };
+      xhr.send(file);
+    });
+  }
+
+  async function followUpdate(id) {
+    const text = { loading: "Loading the new version…", restarting: "Starting the new version…" };
+    for (let i = 0; i < 400; i++) {   // up to about 13 minutes
+      await new Promise((r) => setTimeout(r, 2000));
+      let info;
+      try { info = await api("/api/update"); } catch (err) { $("#up-result").textContent = "Restarting…"; continue; }
+      const st = info.status;
+      if (!st || st.id !== id) { $("#up-result").textContent = "Waiting for the Pi to pick up the update…"; continue; }
+      if (st.state === "done") {
+        $("#up-result").textContent = `${st.message} Reloading…`;
+        toast("The app is updated.");
+        setTimeout(() => location.reload(), 1500);
+        return;
+      }
+      if (st.state === "rolled_back" || st.state === "failed") throw new Error(st.message);
+      $("#up-result").textContent = text[st.state] || st.message;
+    }
+    throw new Error("The Pi is taking very long. Reload this page in a few minutes.");
+  }
+
+  upSend.addEventListener("click", async () => {
+    const f = upFile.files[0];
+    if (!f) return;
+    upSend.disabled = true;
+    $("#up-bar").hidden = false;
+    $("#up-bar").value = 0;
+    try {
+      const r = await sendUpdate(f, upSha.value.trim().toLowerCase());
+      $("#up-result").textContent = "Sent. Installing…";
+      await followUpdate(r.id);
+    } catch (err) {
+      $("#up-result").textContent = err.message;
+      toast(err.message);
+      $("#up-bar").hidden = true;
+      upReady();
     }
   });
 

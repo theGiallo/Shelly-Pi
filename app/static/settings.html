@@ -174,6 +174,27 @@
       <p class="note" id="bk-result" role="status"></p>
     </section>
 
+    <section class="section" id="update" aria-labelledby="h-update">
+      <h2 id="h-update">Update the app</h2>
+      <p>Running version <strong id="up-version">&ndash;</strong>. The Pi has no internet, so this device does the downloading: look for a new version, save the file it offers, then send that file to the Pi here. Your data is kept. If the new version doesn't start, the Pi goes back to the old one by itself.</p>
+      <div class="actions"><button type="button" class="btn" id="up-check">Look for a new version</button></div>
+      <p class="note" id="up-found" role="status"></p>
+      <div id="up-offer" hidden>
+        <div class="actions"><a class="btn primary" id="up-download" href="#" rel="noopener">Download the update</a></div>
+        <div class="field">
+          <label for="up-file">Then pick the downloaded file (shelly-pi-image.tar)</label>
+          <input id="up-file" type="file" accept=".tar,application/x-tar">
+        </div>
+        <div class="field">
+          <label for="up-sha">Checksum (SHA-256) it must match</label>
+          <input id="up-sha" type="text" spellcheck="false" autocomplete="off" placeholder="Filled in from the release page">
+        </div>
+        <div class="actions"><button type="button" class="btn danger" id="up-send" disabled>Send to the Pi and install</button></div>
+        <progress id="up-bar" max="100" value="0" hidden></progress>
+      </div>
+      <p class="note" id="up-result" role="status"></p>
+    </section>
+
     <section class="section" id="usb" aria-labelledby="h-usb">
       <h2 id="h-usb">Automatic backups to a USB drive</h2>
       <p>Plug a USB stick or drive into the Pi and it saves a backup there on a schedule, so a copy always exists apart from the SD card. Nothing on the drive is changed or formatted: backups go into a folder called <code>shelly-pi-backups</code>, and the Pi only ever deletes its own older backups from that folder. The drive is used just while a backup is copied, so you can unplug it at any other time.</p>

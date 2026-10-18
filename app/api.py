@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import tempfile
 import time
@@ -50,6 +52,7 @@ PAGE_HEADERS = {
     "Cache-Control": "no-cache",
     "Content-Security-Policy": (
         "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "connect-src 'self' https://api.github.com; "
         "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
     ),
     "X-Content-Type-Options": "nosniff",
@@ -564,6 +567,73 @@ def create_app(
                         "previous_data_kept_in": backup.ASIDE}
             finally:
                 shutil.rmtree(work, ignore_errors=True)
+
+    # ---- updating the app ----------------------------------------------------------------------
+
+    MAX_UPDATE_BYTES = 600 * 1024 * 1024
+
+    def update_status() -> dict | None:
+        try:
+            data = json.loads((cfg.bridge_dir / "update.res.json").read_text())
+        except (OSError, ValueError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    @app.get("/api/update")
+    async def update_info() -> dict:
+        return {"version": __version__, "status": await asyncio.to_thread(update_status),
+                "max_bytes": MAX_UPDATE_BYTES}
+
+    @app.post("/api/update")
+    async def update_upload(request: Request, sha256: str = "") -> dict:
+        """Take a new app image (the request body, a `podman save` tar) and hand it to the Pi's update helper."""
+        want = sha256.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", want):
+            raise HTTPException(400, "Give the image's SHA-256 checksum (64 hex digits).")
+        try:
+            declared = int(request.headers.get("content-length", "0"))
+        except ValueError:
+            raise HTTPException(400, "Bad Content-Length.") from None
+        if declared > MAX_UPDATE_BYTES:
+            raise HTTPException(413, "That file is too large to be an app image.")
+        if app.state.admin_lock.locked():
+            raise HTTPException(409, "A backup, restore or update is already running. Try again in a moment.")
+        async with app.state.admin_lock:
+            st = await asyncio.to_thread(update_status)
+            req = cfg.bridge_dir / "update.req"
+            if req.exists() or (st and st.get("state") in ("loading", "restarting")
+                                and time.time() - (cfg.bridge_dir / "update.res.json").stat().st_mtime < 900):
+                raise HTTPException(409, "An update is already being installed.")
+            cfg.bridge_dir.mkdir(parents=True, exist_ok=True)
+            free = shutil.disk_usage(cfg.bridge_dir).free
+            if free < max(declared, 1) * 2 + 200 * 1024 * 1024:
+                raise HTTPException(507, "There isn't enough free space on the Pi for this update.")
+            part, final = cfg.bridge_dir / "update.tar.part", cfg.bridge_dir / "update.tar"
+            h, size = hashlib.sha256(), 0
+            try:
+                with open(part, "wb") as f:
+                    async for chunk in request.stream():
+                        size += len(chunk)
+                        if size > MAX_UPDATE_BYTES:
+                            raise HTTPException(413, "That file is too large to be an app image.")
+                        h.update(chunk)
+                        await asyncio.to_thread(f.write, chunk)
+                if size == 0:
+                    raise HTTPException(400, "The upload was empty.")
+                if h.hexdigest() != want:
+                    raise HTTPException(
+                        422, "The file doesn't match the checksum, so it is damaged or not the release you picked. "
+                             "Nothing was changed.")
+                os.replace(part, final)
+            finally:
+                part.unlink(missing_ok=True)
+            rid = secrets.token_hex(6)
+            tmp = cfg.bridge_dir / ".update.tmp"
+            tmp.write_text(f"{rid} {want}\n")
+            (cfg.bridge_dir / "update.res.json").unlink(missing_ok=True)
+            os.replace(tmp, req)
+            log.info("app update of %d bytes handed to the Pi's helper", size)
+            return {"ok": True, "id": rid, "bytes": size}
 
     # ---- system ------------------------------------------------------------------------------
 

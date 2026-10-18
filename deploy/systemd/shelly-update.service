@@ -1,0 +1,7 @@
+[Unit]
+Description=Install a Shelly-Pi app update uploaded from the web page
+
+[Service]
+Type=oneshot
+TimeoutStartSec=900
+ExecStart=/usr/local/libexec/shelly-pi/update.sh

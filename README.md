@@ -233,8 +233,20 @@ sudo rpm-ostree upgrade && sudo systemctl reboot      # the whole OS, as one ima
 sudo rpm-ostree rollback && sudo systemctl reboot     # if the new image misbehaves
 ```
 
-Containers and your data live outside the OS image, so OS updates don't touch them. To update
-the app itself, build a new image (`bash scripts/build-image.sh` or `sudo bash deploy/setup-host.sh
+Containers and your data live outside the OS image, so OS updates don't touch them.
+
+**Updating the app from the dashboard.** Settings, **Update the app**. The Pi has no internet, so a device that
+does have some does the downloading: "Look for a new version" asks GitHub which release is newest, "Download
+the update" saves `shelly-pi-image.tar` (about 190 MB) on that device, and you pick that file and send it to the
+Pi. The Pi checks the file against the release's SHA-256 checksum, loads it and restarts the app; your data is
+kept. If the new version doesn't answer within 90 seconds, the previous image is put back. (The page asks
+GitHub's API from your browser, which is why the page's security policy allows `api.github.com`.) The page can
+only offer an update that was published as a GitHub release, and tells a newer release from the running one
+by the version number, so bump `__version__` in `app/__init__.py` before publishing a release. Pis installed
+before this feature need one run of `sudo bash deploy/setup-host.sh` (or the installer again) to get the
+helper that installs the update.
+
+From a command line, build a new image (`bash scripts/build-image.sh` or `sudo bash deploy/setup-host.sh
 --rebuild`) and run `sudo systemctl restart shelly-app shelly-dhcp`.
 
 ### HTTPS

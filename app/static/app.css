@@ -414,3 +414,4 @@ section[hidden] { display: none; }
 .how summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
 .how p { margin: 8px 0 4px; color: var(--muted); max-width: 70ch; }
 code { font: 13px ui-monospace, "Cascadia Mono", Menlo, monospace; background: var(--track); padding: 1px 5px; border-radius: 4px; }
+progress { width: 100%; max-width: 420px; margin-top: 10px; }
