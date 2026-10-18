@@ -27,13 +27,13 @@ jobs:
 
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: MSYS
+          msystem: MINGW64
           update: true
 
       - name: Build e2fsprogs (MSYS2 has no package for it)
         shell: msys2 {0}
         run: |
-          pacman -S --noconfirm --needed base-devel gcc make git > pacman.log 2>&1 || { echo "::error::pacman failed: $(tail -c 600 pacman.log | tr '\n' '|')"; exit 1; }
+          pacman -S --noconfirm --needed base-devel mingw-w64-x86_64-gcc mingw-w64-x86_64-make git > pacman.log 2>&1 || { echo "::error::pacman failed: $(tail -c 600 pacman.log | tr '\n' '|')"; exit 1; }
           git clone --depth 1 --branch v1.47.2 https://github.com/tytso/e2fsprogs.git src
           cd src
           if ! ( ./configure --prefix=/usr/local --disable-nls --disable-fuse2fs --disable-defrag --disable-uuidd --disable-e2initrd-helper --without-libarchive > ../configure.log 2>&1 && make -j4 > ../make.log 2>&1 ); then
