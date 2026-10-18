@@ -11,6 +11,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach the tools to (for example v0.1.0); leave empty to only build and test"
+        required: false
+        default: ""
   push:
     paths:
       - ".github/workflows/ext4-tools.yml"
@@ -150,8 +155,9 @@ jobs:
           retention-days: 14
 
       - name: Attach to the release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" ext4-tools-windows.zip ext4-tools-windows.zip.sha256 --clobber
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$TAG" ext4-tools-windows.zip ext4-tools-windows.zip.sha256 --clobber
