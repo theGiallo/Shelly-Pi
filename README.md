@@ -92,6 +92,20 @@ Boot the Pi on Ethernet, find its address in your router's device list, and log 
 
 ### 2. Copy the project and run setup
 
+**On Windows, one script does this step for you.** Double-click `install.cmd` (or run
+`powershell -ExecutionPolicy Bypass -File scripts\install.ps1`). It finds the Pi on your network, makes
+sure your SSH key can log in, copies the project, downloads the container image from the newest
+[release](https://github.com/theGiallo/Shelly-Pi/releases) (or uses a `shelly-pi-image.tar` you put in the
+folder), generates the passwords, runs `deploy/setup-host.sh` and saves the passwords next to you in
+`shelly-pi-credentials_<date>.txt`. It needs the Windows OpenSSH client (on by default in Windows 10 and 11).
+Useful options: `-PiHost 192.168.1.50`, `-User name`, `-Ssid`, `-NoRtc`, `-BuildOnPi`; `Get-Help .\scripts\install.ps1 -Full`
+lists them all. The Pi only needs internet if the image can't be downloaded on your PC.
+How you first log in depends on how the card was written: if it has no user and no SSH key yet, Fedora's first-boot
+setup may need a screen and keyboard once. After that the script puts your SSH key on the Pi for you.
+The script has not been tried on real hardware or in Windows yet.
+
+Without the script, by hand:
+
 From your PC:
 
 ```

@@ -29,6 +29,9 @@ data/
 *.raw
 *.qcow2
 
+# Passwords saved by the installers
+*credentials*.txt
+
 # Secrets: never commit these
 *.pem
 *.key
