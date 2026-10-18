@@ -89,7 +89,7 @@ jobs:
         shell: pwsh
         continue-on-error: true
         run: |
-          Start-Transcript -Path "$env:RUNNER_TEMP\vhd.log" | Out-Null
+          Write-Host "::notice::vhd step started"
           $ErrorActionPreference = "Stop"
           trap { Write-Host ("::error::" + ($_.Exception.Message -replace "[\r\n]+", " | ") + " AT " + ($_.InvocationInfo.PositionMessage -replace "[\r\n]+", " | ")); exit 1 }
           $out = Join-Path $PWD "out"
