@@ -100,12 +100,13 @@ jobs:
           convert gpt
           create partition primary
           "@ | Out-File -Encoding ascii "$env:RUNNER_TEMP\dp.txt"
-          diskpart /s "$env:RUNNER_TEMP\dp.txt"
+          $dpout = diskpart /s "$env:RUNNER_TEMP\dp.txt" 2>&1 | ForEach-Object { "$_" }
+          Write-Host ("::notice::diskpart exit $LASTEXITCODE : " + (($dpout -join " | ") -replace "[\r\n]+", " | "))
           $d = Get-DiskImage -ImagePath $vhd | Get-Disk
           $n = $d.Number
           if ($d.IsSystem -or $d.IsBoot -or $n -eq 0) { throw "refusing to use disk $n: it looks like the system disk" }
           $p = Get-Partition -DiskNumber $n | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
-          Write-Host "disk $n partition offset $($p.Offset) size $($p.Size)"
+          Write-Host "::notice::disk $n partition offset $($p.Offset) size $($p.Size) style $($d.PartitionStyle)"
           $target = "//./PhysicalDrive${n}?offset=$($p.Offset)"
           function Warnout($label, $text) { Write-Host ("::warning::" + $label + ": " + (($text -join " | ") -replace "[\r\n]+", " | ")) }
           # make an ext4 filesystem inside that partition, then add the key, as the installer does on the card
