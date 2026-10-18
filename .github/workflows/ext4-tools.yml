@@ -27,17 +27,19 @@ jobs:
 
       - uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: MSYS
           update: true
 
       - name: Build e2fsprogs (MSYS2 has no package for it)
         shell: msys2 {0}
         run: |
-          pacman -S --noconfirm --needed base-devel mingw-w64-x86_64-gcc mingw-w64-x86_64-make git > pacman.log 2>&1 || { echo "::error::pacman failed: $(tail -c 600 pacman.log | tr '\n' '|')"; exit 1; }
+          pacman -S --noconfirm --needed base-devel gcc make git > pacman.log 2>&1 || { echo "::error::pacman failed: $(tail -c 600 pacman.log | tr '\n' '|')"; exit 1; }
           git clone --depth 1 --branch v1.47.2 https://github.com/tytso/e2fsprogs.git src
           cd src
-          if ! ( ./configure --prefix=/usr/local --disable-nls --disable-fuse2fs --disable-defrag --disable-uuidd --disable-e2initrd-helper --without-libarchive > ../configure.log 2>&1 && make -j4 > ../make.log 2>&1 ); then
-            echo "::error::build failed: configure: $(tail -c 500 ../configure.log | tr '\n' '|') MAKE: $(grep -m3 -i 'error' ../make.log | cut -c1-300 | tr '\n' '|') TAIL: $(tail -c 700 ../make.log | tr '\n' '|')"
+          # upstream's Cygwin branch calls the Microsoft C runtime name; Cygwin spells it get_osfhandle
+          sed -i 's|#include "windows.h"|#include <io.h>\n#include "windows.h"|; s/_get_osfhandle/get_osfhandle/' lib/ext2fs/getsize.c
+          if ! ( ./configure --prefix=/usr/local --disable-nls --disable-fuse2fs --disable-defrag --disable-uuidd --disable-e2initrd-helper --without-libarchive > ../configure.log 2>&1 && make -k -j4 > ../make.log 2>&1 ); then
+            echo "::error::build failed: configure: $(tail -c 500 ../configure.log | tr '\n' '|') MAKE: $(grep -i 'error' ../make.log | head -6 | cut -c1-300 | tr '\n' '|') TAIL: $(tail -c 700 ../make.log | tr '\n' '|')"
             exit 1
           fi
           make install > ../install.log 2>&1 || true
