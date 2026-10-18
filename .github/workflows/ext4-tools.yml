@@ -106,12 +106,19 @@ jobs:
           $p = Get-Partition -DiskNumber $n | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
           Write-Host "disk $n partition offset $($p.Offset) size $($p.Size)"
           $target = "//./PhysicalDrive$n?offset=$($p.Offset)"
+          function Warnout($label, $text) { Write-Host ("::warning::" + $label + ": " + (($text -join " | ") -replace "[\r\n]+", " | ")) }
           # make an ext4 filesystem inside that partition, then add the key, as the installer does on the card
-          & "$out/mke2fs.exe" -q -F -t ext4 -O metadata_csum,64bit,extent $target "$([int]($p.Size / 1024 - 64))"
-          # (the fake OS tree is created with debugfs, since this filesystem is new and empty)
+          $kb = [int]($p.Size / 1024 - 64)
+          $o1 = & "$out/mke2fs.exe" -q -F -t ext4 -O metadata_csum,64bit,extent $target $kb 2>&1 | ForEach-Object { "$_" }
+          Warnout "mke2fs exit $LASTEXITCODE target=$target kb=$kb" $o1
+          $o2 = & "$out/ext4-tools/debugfs.exe" -R "ls -p /" $target 2>&1 | ForEach-Object { "$_" }
+          Warnout "debugfs ls / exit $LASTEXITCODE" $o2
           $cf = Join-Path $out "mk.txt"
-          "mkdir /ostree`nmkdir /ostree/deploy`nmkdir /ostree/deploy/fedora-iot`nmkdir /ostree/deploy/fedora-iot/var`n" | Out-File -Encoding ascii $cf
-          & "$out/ext4-tools/debugfs.exe" -w -f ($cf -replace "\\", "/") $target
+          [System.IO.File]::WriteAllText($cf, "mkdir /ostree`nmkdir /ostree/deploy`nmkdir /ostree/deploy/fedora-iot`nmkdir /ostree/deploy/fedora-iot/var`n")
+          $o3 = & "$out/ext4-tools/debugfs.exe" -w -f ($cf -replace "\\", "/") $target 2>&1 | ForEach-Object { "$_" }
+          Warnout "debugfs mkdir exit $LASTEXITCODE" $o3
+          $o4 = & "$out/ext4-tools/debugfs.exe" -R "ls -p /ostree/deploy" $target 2>&1 | ForEach-Object { "$_" }
+          Warnout "debugfs ls deploy" $o4
           . ./scripts/ext4-inject.ps1
           Add-RootSshKey -Debugfs "$out/ext4-tools/debugfs.exe" -Target $target -PublicKeyFile "$out/testkey.pub"
           Write-Host "physical drive test passed"
