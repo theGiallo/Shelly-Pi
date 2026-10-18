@@ -163,9 +163,16 @@ function Get-FedoraImage {
       $cands = @(Get-CandidatesFromListings)
     }
     if ($cands.Count -eq 0) {
-      Die ("Couldn't find a Fedora IoT aarch64 image. Open https://fedoraproject.org/iot/download in your browser, " +
-           "copy the address of the 'Raw image' for aarch64 (it ends in .aarch64.raw.xz) and run:  install.cmd -ImageUrl <that address>   " +
-           "(or download the file and pass it with -Image).")
+      Warn "I couldn't find the image automatically."
+      if ($Yes) { Die "Pass the image with -Image <file> or -ImageUrl <address>." }
+      Write-Host "  Open https://fedoraproject.org/iot/download in your browser, find 'Raw image' for aarch64"
+      Write-Host "  (the file ends in .aarch64.raw.xz) and either copy its link address or download the file."
+      $a = (Read-Host "Paste the link address or the path of the downloaded file").Trim().Trim('"')
+      if (-not $a) { Die "No image given. Start this again when you have the link." }
+      if (Test-Path -LiteralPath $a -PathType Leaf) { return (Resolve-Path -LiteralPath $a).Path }
+      if ($a -notmatch "^https?://") { Die "That is neither a web address nor an existing file: $a" }
+      $script:ImageUrl = $a
+      return (Get-FedoraImage)
     }
     $best = $cands | Sort-Object @{ Expression = { $_.Release } }, @{ Expression = { $_.Build.Split(".")[0] } }, @{ Expression = { [int]$_.Build.Split(".")[1] } } | Select-Object -Last 1
     $name = $best.Name; $url = $best.Url; $sumUrl = $best.SumUrl
@@ -288,6 +295,32 @@ function Get-SevenZip {
   return $dest
 }
 
+function Ask-LocalImage {
+  # Looks for Fedora IoT image files already on this PC and asks which one to use. Returns a path, or "" to download.
+  $found = @()
+  foreach ($d in @($Cache, (Join-Path $env:USERPROFILE "Downloads"), (Join-Path $env:USERPROFILE "Desktop"))) {
+    if (Test-Path $d) { $found += @(Get-ChildItem -Path $d -Filter "Fedora-IoT*.raw*" -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch "\.part$" }) }
+  }
+  $part = @(Get-ChildItem -Path $Cache -Filter "*.part" -File -ErrorAction SilentlyContinue)
+  Write-Host ""
+  if ($found.Count -gt 0) {
+    Write-Host "Fedora IoT image files already on this PC:" -ForegroundColor Cyan
+    for ($i = 0; $i -lt $found.Count; $i++) {
+      Write-Host ("  [{0}] {1}  - {2} MB, in {3}" -f ($i + 1), $found[$i].Name, [math]::Round($found[$i].Length / 1MB), $found[$i].DirectoryName)
+    }
+    Write-Host "  [Enter] download the newest one from Fedora"
+    $a = (Read-Host "Type a number to use one of these, or paste the path of another file, or press Enter to download").Trim().Trim('"')
+  } else {
+    if ($part.Count -gt 0) { Write-Host "An earlier download was interrupted; it will continue where it stopped." -ForegroundColor Cyan }
+    $a = (Read-Host "Do you already have a Fedora IoT image file (.raw.xz) on this PC? Paste its path, or press Enter to download it").Trim().Trim('"')
+  }
+  if (-not $a) { return "" }
+  if ($a -match "^\d+$" -and [int]$a -ge 1 -and [int]$a -le $found.Count) { return $found[[int]$a - 1].FullName }
+  if (Test-Path -LiteralPath $a -PathType Leaf) { return (Resolve-Path -LiteralPath $a).Path }
+  Warn "I can't find a file at: $a. Downloading instead."
+  return ""
+}
+
 # ---- run ------------------------------------------------------------------------------------------------------------------
 
 $user = "root"
@@ -302,7 +335,9 @@ if (-not $SkipSd) {
     if (-not (Test-Path $Image)) { Die "Can't find $Image." }
     $imagePath = (Resolve-Path $Image).Path
   } else {
-    $imagePath = Get-FedoraImage
+    $imagePath = ""
+    if (-not $Yes -and -not $ImageUrl) { $imagePath = Ask-LocalImage }
+    if (-not $imagePath) { $imagePath = Get-FedoraImage }
   }
   $extractor = ""
   if ($imagePath -match "\.xz$") { $extractor = Get-SevenZip }
