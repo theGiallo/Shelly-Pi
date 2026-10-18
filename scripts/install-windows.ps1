@@ -156,7 +156,15 @@ function Get-FedoraImage {
     if (-not $sumUrl) {
       # the page didn't link a checksum file: look where Fedora keeps it, next to the image on the main server
       $dirUrl = "https://dl.fedoraproject.org/pub/alt/iot/$($best.Release)/IoT/aarch64/images/"
-      foreach ($cand in @("Fedora-IoT-$($best.Release)-aarch64-$($best.Build)-CHECKSUM", "Fedora-IoT-$($best.Release)-$($best.Build)-aarch64-CHECKSUM")) {
+      $names = @()
+      try {
+        $listing = Get-Text $dirUrl
+        $names += @([regex]::Matches($listing, "Fedora-IoT[^\s`"'<>/]*CHECKSUM") | ForEach-Object { $_.Value } | Sort-Object -Unique)
+      } catch { }
+      $names += @("Fedora-IoT-$($best.Release)-aarch64-$($best.Build)-CHECKSUM", "Fedora-IoT-$($best.Release)-$($best.Build)-aarch64-CHECKSUM", "Fedora-IoT-$($best.Release)-$($best.Build)-CHECKSUM")
+      # prefer the file for this build, then any other
+      $names = @($names | Where-Object { $_ -like "*$($best.Build)*" }) + @($names | Where-Object { $_ -notlike "*$($best.Build)*" })
+      foreach ($cand in $names) {
         try { [void](Get-Text "$dirUrl$cand"); $sumUrl = "$dirUrl$cand"; break } catch { }
       }
     }
@@ -168,10 +176,14 @@ function Get-FedoraImage {
     try {
       $sumText = Get-Text $sumUrl
       $m = [regex]::Match($sumText, "SHA256 \($([regex]::Escape($name))\) = ([0-9a-fA-F]{64})")
-      if ($m.Success) { $want = $m.Groups[1].Value.ToLower() }
+      if (-not $m.Success) {
+        # the checksum file may spell the name a little differently (with or without "raw-"): match on release and build
+        $m = [regex]::Match($sumText, "SHA256 \(.*?$($best.Release).*?$([regex]::Escape($best.Build))\.aarch64\.raw\.xz\) = ([0-9a-fA-F]{64})")
+      }
+      if ($m.Success) { $want = $m.Groups[1].Value.ToLower() } else { Warn "Read $sumUrl but it has no line for $name." }
     } catch { Warn "Couldn't read the checksum file ($($_.Exception.Message))." }
   }
-  if (-not $want -and -not $ImageUrl) { Warn "No checksum found for this image, so the download can't be verified." }
+  if (-not $want -and -not $ImageUrl) { Warn "No checksum found for this image, so the download can't be verified. (looked at: $(if ($sumUrl) { $sumUrl } else { 'no checksum file found' }))" }
   if ((Test-Path $dest) -and $want -and ((Get-FileHash -Algorithm SHA256 $dest).Hash.ToLower() -eq $want)) {
     Note "Already downloaded and checked."
     return $dest
