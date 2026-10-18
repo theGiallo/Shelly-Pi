@@ -89,6 +89,7 @@ jobs:
         shell: pwsh
         continue-on-error: true
         run: |
+          Start-Transcript -Path "$env:RUNNER_TEMP\vhd.log" | Out-Null
           $ErrorActionPreference = "Stop"
           trap { Write-Host ("::error::" + ($_.Exception.Message -replace "[\r\n]+", " | ") + " AT " + ($_.InvocationInfo.PositionMessage -replace "[\r\n]+", " | ")); exit 1 }
           $out = Join-Path $PWD "out"
@@ -124,6 +125,17 @@ jobs:
           . ./scripts/ext4-inject.ps1
           Add-RootSshKey -Debugfs "$out/ext4-tools/debugfs.exe" -Target $target -PublicKeyFile "$out/testkey.pub"
           Write-Host "physical drive test passed"
+
+      - name: Show the virtual disk test log
+        if: always()
+        shell: pwsh
+        run: |
+          $f = "$env:RUNNER_TEMP\vhd.log"
+          if (Test-Path $f) {
+            $t = (Get-Content -Raw $f) -replace "[\r\n]+", " | "
+            if ($t.Length -gt 3500) { $t = $t.Substring($t.Length - 3500) }
+            Write-Host "::warning::VHDLOG $t"
+          } else { Write-Host "::warning::VHDLOG no log file" }
 
       - name: Pack
         shell: pwsh
