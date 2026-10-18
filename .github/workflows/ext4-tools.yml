@@ -221,7 +221,7 @@ jobs:
           select vdisk file="$vhdA"
           attach vdisk
           convert mbr
-          create partition primary size=120
+          create partition primary size=120 offset=16384
           "@ | Out-File -Encoding ascii "$env:RUNNER_TEMP\a2.txt"
           diskpart /s "$env:RUNNER_TEMP\a2.txt" | Out-Null
           $dA = Get-DiskImage -ImagePath $vhdA | Get-Disk
