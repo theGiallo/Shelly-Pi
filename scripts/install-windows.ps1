@@ -164,8 +164,16 @@ function Get-FedoraImage {
       $names += @("Fedora-IoT-$($best.Release)-aarch64-$($best.Build)-CHECKSUM", "Fedora-IoT-$($best.Release)-$($best.Build)-aarch64-CHECKSUM", "Fedora-IoT-$($best.Release)-$($best.Build)-CHECKSUM")
       # prefer the file for this build, then any other
       $names = @($names | Where-Object { $_ -like "*$($best.Build)*" }) + @($names | Where-Object { $_ -notlike "*$($best.Build)*" })
-      foreach ($cand in $names) {
-        try { [void](Get-Text "$dirUrl$cand"); $sumUrl = "$dirUrl$cand"; break } catch { }
+      # dl.fedoraproject.org answers scripts with an anti-bot page, so try the mirror redirector first
+      $hosts = @("https://download.fedoraproject.org", "https://dl.fedoraproject.org")
+      :find foreach ($h in $hosts) {
+        foreach ($cand in $names) {
+          $u = "$h/pub/alt/iot/$($best.Release)/IoT/aarch64/images/$cand"
+          try {
+            $t = Get-Text $u
+            if ($t -match "SHA256|BEGIN PGP" -and $t -notmatch "anubis") { $sumUrl = $u; break find }
+          } catch { }
+        }
       }
     }
   }
@@ -175,6 +183,10 @@ function Get-FedoraImage {
   if ($sumUrl) {
     try {
       $sumText = Get-Text $sumUrl
+      if ($sumText -match "anubis") {
+        # anti-bot page from dl.fedoraproject.org: ask the mirror redirector for the same file
+        $sumText = Get-Text ($sumUrl -replace "^https://dl\.fedoraproject\.org", "https://download.fedoraproject.org")
+      }
       # any line that has a 64-digit hash and names this build's raw image, in either layout:
       #   SHA256 (file) = hash      or      hash  file
       foreach ($line in ($sumText -split "`n")) {
