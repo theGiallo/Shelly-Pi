@@ -25,7 +25,7 @@ public static class SdWriter {
     offset = 0; size = 0;
     if (head.Length < 2048) return false;
     string sig = System.Text.Encoding.ASCII.GetString(head, 512, 8);
-    if (sig != "EFI PART") return false;
+    if (sig != "EFI PART") return FindLargestMbr(head, out offset, out size);
     long entLba = BitConverter.ToInt64(head, 512 + 72);
     int count = BitConverter.ToInt32(head, 512 + 80);
     int esz = BitConverter.ToInt32(head, 512 + 84);
@@ -42,6 +42,24 @@ public static class SdWriter {
     }
     return size > 0;
   }
+
+  // Old-style (MBR) partition table: four entries at byte 446; the biggest one.
+  static bool FindLargestMbr(byte[] head, out long offset, out long size) {
+    offset = 0; size = 0;
+    if (head[510] != 0x55 || head[511] != 0xAA) return false;
+    for (int i = 0; i < 4; i++) {
+      int p = 446 + i * 16;
+      int type = head[p + 4];
+      if (type == 0 || type == 0xEE || type == 0x05 || type == 0x0F) continue;
+      long first = BitConverter.ToUInt32(head, p + 8), count = BitConverter.ToUInt32(head, p + 12);
+      long len = count * 512;
+      if (len > size) { size = len; offset = first * 512; }
+    }
+    return size > 0;
+  }
+
+  // Set when the partition table in the image could not be read (so beforeHead was not called).
+  public static string Problem = "";
 
   // beforeHead (optional) is called once everything except the first 4 MB is on the card, with the offset and size of
   // the biggest partition. At that moment the card has no partition table yet, so Windows hasn't mounted anything
@@ -87,9 +105,13 @@ public static class SdWriter {
       dst.Flush(true);
       Console.WriteLine();
       long partOffset, partSize;
-      if (beforeHead != null && FindLargestPartition(head, out partOffset, out partSize)) {
-        beforeHead(partOffset, partSize);
-        dst.Flush(true);
+      if (beforeHead != null) {
+        if (FindLargestPartition(head, out partOffset, out partSize)) {
+          beforeHead(partOffset, partSize);
+          dst.Flush(true);
+        } else {
+          Problem = "I couldn't read the partition table at the start of the image.";
+        }
       }
       dst.Position = 0;
       dst.Write(head, 0, Head);

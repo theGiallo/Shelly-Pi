@@ -104,11 +104,16 @@ try {
   Say "Writing the image (this takes 5 to 20 minutes; don't remove the card)"
   $device = "\\.\PhysicalDrive$n"
   $script:keyAdded = $false
+  $script:hookRan = $false
   $hook = $null
+  if (-not ($ToolsDir -and $PublicKey)) {
+    Warn "Not adding an SSH key to the card: the tool that does it wasn't available. The Pi will need a user created on its own screen and keyboard."
+  }
   if ($ToolsDir -and $PublicKey) {
     . (Join-Path $PSScriptRoot "ext4-inject.ps1")
     $hook = [Action[long, long]]{
       param($off, $size)
+      $script:hookRan = $true
       Say "Letting your PC log in to the Pi (adding your SSH key to the card)"
       try {
         Add-RootSshKeyAt -Device $device -Offset $off -Size $size -ToolsDir $ToolsDir -PublicKeyFile $PublicKey -WorkDir $env:TEMP
@@ -142,6 +147,10 @@ try {
     if ($proc.ExitCode -ne 0) { Fail "Unpacking the image failed (7-Zip exit code $($proc.ExitCode)). The download may be damaged: delete it and run install.cmd again." }
   }
   Note ("Wrote {0:N0} MB." -f ($written / 1MB))
+  if ($hook -and -not $script:hookRan) {
+    Warn ("The SSH key step did not run. " + [SdWriter]::Problem)
+    Warn "The card is written and still good, but the Pi will need a user created on its own screen and keyboard."
+  }
 
   Say "Finishing"
   try { Update-Disk -Number $n -ErrorAction SilentlyContinue } catch { }
