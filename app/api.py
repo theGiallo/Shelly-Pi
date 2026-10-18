@@ -326,13 +326,17 @@ def create_app(
 
     @app.get("/api/wizard/qr.svg")
     def wizard_qr(
-        kind: Literal["provision", "reboot", "page", "plugwifi"] = "provision", ssid: str = "",
+        kind: Literal["provision", "reboot", "page", "plugwifi", "apwifi", "dashboard"] = "provision", ssid: str = "",
     ) -> Response:
         w: Wizard = app.state.wizard
         if kind == "plugwifi":
             if not is_shelly_ssid(ssid):
                 raise HTTPException(400, "That isn't the name of a Shelly's Wi-Fi network.")
             content = wifi_qr_text(ssid)
+        elif kind == "apwifi":
+            content = wifi_qr_text(cfg.ap_ssid, cfg.ap_password)
+        elif kind == "dashboard":
+            content = f"http://{cfg.ap_ip}/"
         else:
             content = {
                 "provision": w.provision_url(), "reboot": w.reboot_url(),

@@ -122,3 +122,7 @@ def test_qr_for_joining_the_plug(run_app):
     # it won't make a sign-in code for any other network name
     for bad in ("ShellyPi", "", "HomeWifi;P:secret"):
         assert h.client.get("/api/wizard/qr.svg", params={"kind": "plugwifi", "ssid": bad}).status_code == 400
+
+
+def test_wifi_qr_text_with_password():
+    assert wifi_qr_text("ShellyPi", "abc;12") == r"WIFI:T:WPA;S:ShellyPi;P:abc\;12;;"

@@ -36,10 +36,13 @@ def quality(dbm: float) -> str:
     return "weak"
 
 
-def wifi_qr_text(ssid: str) -> str:
-    """The standard Wi-Fi sign-in code that phone cameras understand, for an open network."""
-    esc = re.sub(r'([\\;,:"])', r"\\\1", ssid)
-    return f"WIFI:T:nopass;S:{esc};;"
+def wifi_qr_text(ssid: str, password: str = "") -> str:
+    """The standard Wi-Fi sign-in code that phone cameras understand (open network, or WPA with a password)."""
+    def esc(v: str) -> str:
+        return re.sub(r'([\\;,:"])', r"\\\1", v)
+    if not password:
+        return f"WIFI:T:nopass;S:{esc(ssid)};;"
+    return f"WIFI:T:WPA;S:{esc(ssid)};P:{esc(password)};;"
 
 
 def shelly_networks(raw: Any, known_macs: Iterable[tuple[str, str]] = ()) -> list[dict]:

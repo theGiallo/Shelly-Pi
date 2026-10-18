@@ -296,6 +296,9 @@ dialog h2 { font: 600 20px/1.3 var(--font-ui); margin-bottom: 16px; }
 .qr-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 .qr { width: 220px; height: 220px; background: #fff; border-radius: 8px; padding: 8px; border: 1px solid var(--line); }
 .qr img { width: 100%; height: 100%; display: block; }
+.qr-pair { display: flex; flex-wrap: wrap; gap: 20px; margin: 12px 0; }
+.qr-fig { margin: 0; display: grid; gap: 6px; }
+.qr-fig figcaption { font-size: .9rem; color: var(--muted); }
 .qr-side { flex: 1 1 220px; display: grid; gap: 10px; align-content: start; }
 .note { font-size: 14px; color: var(--muted); }
 

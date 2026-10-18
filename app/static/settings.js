@@ -30,6 +30,9 @@
     $("#ap-pass").dataset.value = sys.ap.password || "";
     if (!sys.ap.password) { $("#ap-pass").textContent = "No password set"; $("#ap-show").hidden = true; }
 
+    $("#qr-apwifi").src = "/api/wizard/qr.svg?kind=apwifi&t=" + Date.now();
+    $("#qr-dash").src = "/api/wizard/qr.svg?kind=dashboard";
+
     const db = sys.db;
     const rows = [
       ["Plugs", String(db.devices)],
