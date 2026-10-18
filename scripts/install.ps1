@@ -196,8 +196,26 @@ if ((Test-Ssh ($SshOpts + @("-o", "BatchMode=yes", $Target, "true"))) -ne 0) {
   }
 }
 Note "Logged in."
-$Sudo = ""
-if ($User -ne "root") { $Sudo = "sudo " }
+$RemoteHome = ((& $SshExe @SshOpts $Target 'echo $HOME' | Select-Object -First 1) | Out-String).Trim()
+if (-not $RemoteHome) { $RemoteHome = "~" }
+$SudoPassword = ""
+if ($User -ne "root") {
+  Note "'$User' isn't root, so the setup runs through sudo. Type its password (the one you gave the Pi) so I can pass it on."
+  $sec = Read-Host "Password of $User on the Pi" -AsSecureString
+  $SudoPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+}
+
+# Runs a bash script on the Pi as root: uploads it to a private file, runs it (through sudo when the user isn't root), removes it.
+function Invoke-RemoteRoot([string]$script) {
+  $code = Invoke-WithInput $SshExe ($SshOpts + @($Target, "umask 077; cat > ~/.shelly-pi-run.sh")) $script
+  if ($code -ne 0) { return $code }
+  if ($User -eq "root") {
+    $run = "bash ~/.shelly-pi-run.sh; rc=`$?; rm -f ~/.shelly-pi-run.sh; exit `$rc"
+    return (Invoke-WithInput $SshExe ($SshOpts + @($Target, $run)) "")
+  }
+  $run = "sudo -S -p '' bash ~/.shelly-pi-run.sh; rc=`$?; rm -f ~/.shelly-pi-run.sh; exit `$rc"
+  return (Invoke-WithInput $SshExe ($SshOpts + @($Target, $run)) ($SudoPassword + "`n"))
+}
 $remoteOs = & $SshExe @SshOpts $Target "uname -m; . /etc/os-release 2>/dev/null; echo `$PRETTY_NAME"
 if ($LASTEXITCODE -eq 0) {
   Note ("The Pi says: " + (($remoteOs | ForEach-Object { "$_" }) -join ", "))
@@ -289,16 +307,14 @@ if ($image) {
 Say "Setting up the Pi (this takes a few minutes)"
 $flags = "--yes --ssid " + (Sh-Quote $Ssid) + " --channel $Channel --country " + (Sh-Quote $Country) + " --hostname " + (Sh-Quote $Hostname)
 if ($NoRtc) { $flags += " --no-rtc" } else { $flags += " --rtc" }
-$keep = ""
-if ($Sudo) { $keep = "--preserve-env=SHELLY_AP_PASSWORD,SHELLY_ADMIN_PASSWORD " }
 $remote = @"
 set -eo pipefail
 export SHELLY_AP_PASSWORD=$(Sh-Quote $ApPassword)
 export SHELLY_ADMIN_PASSWORD=$(Sh-Quote $AdminPassword)
-cd "`$HOME/Shelly-Pi"
-${Sudo}${keep}bash deploy/setup-host.sh $flags 2>&1 | tee /tmp/shelly-pi-setup.log
+cd $(Sh-Quote "$RemoteHome/Shelly-Pi")
+bash deploy/setup-host.sh $flags 2>&1 | tee /tmp/shelly-pi-setup.log
 "@
-$code = Invoke-WithInput $SshExe ($SshOpts + @($Target, "bash -s")) $remote
+$code = Invoke-RemoteRoot $remote
 if ($code -ne 0) {
   Die "The setup on the Pi stopped with an error (see above). The log is on the Pi in /tmp/shelly-pi-setup.log. You can run this script again; it reuses what is already there."
 }
@@ -334,10 +350,10 @@ if ((Test-Ssh ($SshOpts + @($Target, "grep -q 'Reboot now' /tmp/shelly-pi-setup.
   $go = "y"
   if (-not $Yes) { $go = Read-Host "Reboot it now? (Y/n)" }
   if ($go -notmatch "^[nN]") {
-    Test-Ssh ($SshOpts + @($Target, "${Sudo}systemctl reboot")) | Out-Null
+    Invoke-RemoteRoot "systemctl reboot" | Out-Null
     Note "Rebooting. In a minute, open Settings in the dashboard and press 'Set the Pi's clock'."
   } else {
-    Note "Reboot later with:  ssh $Target ${Sudo}systemctl reboot"
+    Note "Reboot later with:  ssh $Target sudo systemctl reboot"
   }
 }
 Test-Ssh ($SshOpts + @($Target, "rm -f /tmp/shelly-pi-setup.log")) | Out-Null

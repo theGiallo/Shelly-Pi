@@ -1,5 +1,6 @@
 @echo off
-rem Double-click to install Shelly-Pi on a Raspberry Pi. Extra options are passed on, e.g.  install.cmd -PiHost 192.168.1.50
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install.ps1" %*
+rem One click for Windows: downloads Fedora IoT, writes the SD card, installs Shelly-Pi on the Pi.
+rem Options are passed on, e.g.  install.cmd -SkipSd   or   install.cmd -PiHost 192.168.1.50
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-windows.ps1" %*
 echo.
 pause

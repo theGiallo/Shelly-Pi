@@ -5,18 +5,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PS1 = (ROOT / "scripts" / "install.ps1").read_text()
+ALL = {n: (ROOT / "scripts" / n).read_text() for n in ("install.ps1", "install-windows.ps1", "flash-sd.ps1")}
 SETUP = (ROOT / "deploy" / "setup-host.sh").read_text()
 
 
 def test_ascii_only_so_windows_powershell_5_reads_it_without_a_bom():
-    assert all(ord(c) < 128 for c in PS1)
+    for name, text in ALL.items():
+        assert all(ord(c) < 128 for c in text), name
 
 
 def test_here_strings_and_brackets_balance():
-    assert PS1.count("@'") == PS1.count("\n'@")
-    assert PS1.count('@"') == PS1.count('\n"@')
-    for a, b in ("{}", "()", "[]"):
-        assert PS1.count(a) == PS1.count(b), a
+    for name, text in ALL.items():
+        assert text.count("@'") == text.count("\n'@"), name
+        assert text.count('@"') == text.count('\n"@'), name
+        for a, b in ("{}", "()", "[]"):
+            assert text.count(a) == text.count(b), (name, a)
 
 
 def test_every_flag_it_passes_exists_in_setup_host():
@@ -35,6 +38,23 @@ def test_the_image_name_matches_what_setup_host_loads_and_ci_publishes():
     assert "shelly-pi-image.tar" in (ROOT / ".github" / "workflows" / "image.yml").read_text()
 
 
-def test_the_double_click_wrapper_points_at_the_script():
-    cmd = (ROOT / "install.cmd").read_bytes()
-    assert b"scripts\\install.ps1" in cmd and b"\r\n" in cmd
+def test_windows_files_have_windows_line_endings():
+    for name in ALL:
+        raw = (ROOT / "scripts" / name).read_bytes()
+        assert raw.count(b"\r\n") == raw.count(b"\n"), name
+
+
+def test_the_card_writer_is_only_started_with_things_it_declares():
+    wizard, flash = ALL["install-windows.ps1"], ALL["flash-sd.ps1"]
+    for param in ("-Image", "-Extractor", "-Disk", "-Yes"):
+        assert param in wizard and param.lstrip("-") in flash, param
+    assert "flash-sd.ps1" in wizard and "install.ps1" in wizard
+
+
+def test_the_card_writer_never_offers_the_system_disk():
+    flash = ALL["flash-sd.ps1"]
+    assert "-not $_.IsSystem" in flash and "-not $_.IsBoot" in flash and "USB" in flash
+
+
+def test_the_one_click_file_runs_the_wizard():
+    assert b"install-windows.ps1" in (ROOT / "install.cmd").read_bytes()
