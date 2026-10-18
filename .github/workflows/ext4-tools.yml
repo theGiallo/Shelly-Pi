@@ -109,6 +109,9 @@ jobs:
           $p = Get-Partition -DiskNumber $n | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
           Write-Host "::notice::disk $n partition offset $($p.Offset) size $($p.Size) style $($d.PartitionStyle)"
           $target = "//./PhysicalDrive${n}?offset=$($p.Offset)"
+          # the Cygwin layer's own name for that partition: disk 2 partition 1 is /dev/sdc1
+          $target = "/dev/sd" + [char](97 + $n) + $p.PartitionNumber
+          Write-Host "::notice::using $target"
           # Windows blocks raw writes into partitions it has mounted; an offline disk has none
           Set-Disk -Number $n -IsOffline $true
           Write-Host "::notice::disk $n offline: $((Get-Disk -Number $n).IsOffline)"
