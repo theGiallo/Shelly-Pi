@@ -28,8 +28,15 @@ jobs:
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MSYS
-          update: false
-          install: e2fsprogs
+          update: true
+
+      - name: Install e2fsprogs
+        shell: msys2 {0}
+        run: |
+          if ! pacman -S --noconfirm --needed e2fsprogs > pacman.log 2>&1; then
+            echo "::error::pacman failed: $(tr '\n' '|' < pacman.log | cut -c1-900) SEARCH: $(pacman -Ss e2fs | tr '\n' '|' | cut -c1-600)"
+            exit 1
+          fi
 
       - name: Collect debugfs.exe and the libraries it needs
         shell: msys2 {0}
