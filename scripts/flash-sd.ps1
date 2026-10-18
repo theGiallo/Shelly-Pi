@@ -115,7 +115,9 @@ public static class SdWriter {
     SafeFileHandle h = CreateFile(device, GENERIC_READ_WRITE, SHARE_READ_WRITE, IntPtr.Zero, OPEN_EXISTING, WRITE_THROUGH, IntPtr.Zero);
     if (h.IsInvalid)
       throw new IOException("Can't open " + device + " for writing (Windows error " + Marshal.GetLastWin32Error() + "). Close programs that use the card and try again.");
-    long total = 0, nextReport = 0;
+    long total = 0, lastTotal = 0;
+    double speed = 0, lastSec = 0;   // speed: bytes per second, smoothed over the last half minute or so
+    System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
     using (FileStream dst = new FileStream(h, FileAccess.ReadWrite, 1, false)) {
       byte[] head = new byte[Head];
       int got = Fill(src, head);
@@ -131,10 +133,18 @@ public static class SdWriter {
         if (Head + (total - Head) + w > diskBytes) throw new IOException("The image is bigger than the card.");
         dst.Write(buf, 0, w);
         total += n;
-        if (total >= nextReport) {
-          nextReport = total + 64L * 1024 * 1024;
-          if (expected > 0) Console.Write("\r    {0:N0} of {1:N0} MB written ({2}%)   ", total / 1048576, expected / 1048576, total * 100 / expected);
-          else Console.Write("\r    {0:N0} MB written   ", total / 1048576);
+        double sec = clock.Elapsed.TotalSeconds;
+        if (sec - lastSec >= 2) {
+          double inst = (total - lastTotal) / (sec - lastSec);
+          speed = speed <= 0 ? inst : speed * 0.85 + inst * 0.15;
+          lastSec = sec; lastTotal = total;
+          string eta = "";
+          if (expected > total && speed > 0) {
+            int left = (int)((expected - total) / speed);
+            eta = string.Format("  about {0}:{1:00} left", left / 60, left % 60);
+          }
+          if (expected > 0) Console.Write("\r    {0:N0} of {1:N0} MB written ({2}%)  {3:N1} MB/s{4}          ", total / 1048576, expected / 1048576, total * 100 / expected, speed / 1048576, eta);
+          else Console.Write("\r    {0:N0} MB written  {1:N1} MB/s          ", total / 1048576, speed / 1048576);
         }
         if (n < Chunk) break;
       }
