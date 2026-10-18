@@ -62,6 +62,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          trap { Write-Host ("::error::" + ($_.Exception.Message -replace "[\r\n]+", " | ") + " AT " + ($_.InvocationInfo.PositionMessage -replace "[\r\n]+", " | ")); exit 1 }
           $out = Join-Path $PWD "out"
           # a fake Fedora IoT root: /ostree/deploy/fedora-iot/var/roothome
           $root = Join-Path $out "root"
@@ -87,6 +88,7 @@ jobs:
         continue-on-error: true
         run: |
           $ErrorActionPreference = "Stop"
+          trap { Write-Host ("::error::" + ($_.Exception.Message -replace "[\r\n]+", " | ") + " AT " + ($_.InvocationInfo.PositionMessage -replace "[\r\n]+", " | ")); exit 1 }
           $out = Join-Path $PWD "out"
           $vhd = Join-Path $env:RUNNER_TEMP "ext4test.vhd"
           @"
