@@ -26,7 +26,12 @@ param(
 $ErrorActionPreference = "Stop"
 function Say([string]$m)  { Write-Host ""; Write-Host "==> $m" -ForegroundColor Cyan }
 function Note([string]$m) { Write-Host "    $m" }
-function Warn([string]$m) { Write-Host "  ! $m" -ForegroundColor Yellow }
+$FlashLog = Join-Path $env:TEMP "shelly-pi-flash.log"
+try { Set-Content -Path $FlashLog -Value "" -Encoding ASCII } catch { }
+function Warn([string]$m) {
+  Write-Host "  ! $m" -ForegroundColor Yellow
+  try { Add-Content -Path $FlashLog -Value $m -Encoding ASCII } catch { }
+}
 function Fail([string]$m) {
   Write-Host ""; Write-Host "Error: $m" -ForegroundColor Red
   Read-Host "Press Enter to close this window" | Out-Null

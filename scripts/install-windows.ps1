@@ -425,7 +425,15 @@ if (-not $SkipSd) {
     Die "The card writer couldn't start (was the administrator prompt declined?): $($_.Exception.Message)"
   }
   $keyOnCard = [bool]$tools
-  if ($p.ExitCode -eq 2) { $keyOnCard = $false }
+  if ($p.ExitCode -eq 2) {
+    $keyOnCard = $false
+    $log = Join-Path $env:TEMP "shelly-pi-flash.log"
+    if (Test-Path $log) {
+      Warn "The card is written, but your SSH key could not be added. The writer said:"
+      foreach ($l in (Get-Content $log)) { if ($l.Trim()) { Write-Host ("      " + $l) -ForegroundColor Yellow } }
+      Write-Host "  Please send those lines to the developer."
+    }
+  }
   elseif ($p.ExitCode -ne 0) { Die "Writing the card didn't finish (see the other window). Nothing else was done." }
 
   Say "Start the Pi"
