@@ -19,6 +19,9 @@ LISTING = """<html><body><h1>Index of /pub/alt/iot/44/IoT/aarch64/images</h1>
 <a href="Fedora-IoT-44-20260415.1.aarch64.iso">Fedora-IoT-44-20260415.1.aarch64.iso</a>
 <a href="Fedora-IoT-44-20260415.10.aarch64.raw.xz">Fedora-IoT-44-20260415.10.aarch64.raw.xz</a>
 <a href="Fedora-IoT-43-20251101.0.aarch64.raw.xz">Fedora-IoT-43-20251101.0.aarch64.raw.xz</a>
+<a href="Fedora-IoT-raw-45-20261001.0.aarch64.raw.xz">Fedora-IoT-raw-45-20261001.0.aarch64.raw.xz</a>
+<a href="Fedora-IoT-raw-45-20261020.0.aarch64.raw.xz">Fedora-IoT-raw-45-20261020.0.aarch64.raw.xz</a>
+<a href="Fedora-IoT-45-aarch64-20261020.0-CHECKSUM">Fedora-IoT-45-aarch64-20261020.0-CHECKSUM</a>
 </body></html>
 """
 
@@ -43,6 +46,10 @@ def test_image_discovery_picks_the_newest_build_of_the_release(tmp_path):
     assert r.stdout.strip() == "Fedora-IoT-44-20260415.10.aarch64.raw.xz"          # version sort: .10 after .1
     assert sh(f'latest_from_listing "{f}" 43').stdout.strip() == "Fedora-IoT-43-20251101.0.aarch64.raw.xz"
     assert sh(f'latest_from_listing "{f}" 99').stdout.strip() == ""
+    # the spelling Fedora uses now: Fedora-IoT-raw-<release>-<build>.aarch64.raw.xz, checksum Fedora-IoT-<release>-aarch64-<build>-CHECKSUM
+    assert sh(f'latest_from_listing "{f}" 45').stdout.strip() == "Fedora-IoT-raw-45-20261020.0.aarch64.raw.xz"
+    r = sh(f'checksum_file_from_listing "{f}" 45 Fedora-IoT-raw-45-20261020.0.aarch64.raw.xz')
+    assert r.stdout.strip() == "Fedora-IoT-45-aarch64-20261020.0-CHECKSUM"
     r = sh(f'checksum_file_from_listing "{f}" 44 Fedora-IoT-44-20260415.1.aarch64.raw.xz')
     assert r.stdout.strip() == "Fedora-IoT-44-20260415.1-aarch64-CHECKSUM"
 

@@ -33,7 +33,8 @@ export LC_ALL=C
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BASE_URL="https://download.fedoraproject.org/pub/alt/iot"
+BASE_URL="https://dl.fedoraproject.org/pub/alt/iot"          # directory listings and checksums
+MIRROR_URL="https://download.fedoraproject.org/pub/alt/iot"   # the big download, redirected to a nearby mirror
 
 MEDIA="" IMAGE="" RELEASE=44 SSH_KEY="" SSID="ShellyPi" AP_PASSWORD="" ADMIN_PASSWORD=""
 HOSTNAME_WANTED="shellypi" CHANNEL=6 COUNTRY=IT RTC=yes APP_IMAGE="" CACHE="" ASSUME_YES=0 INJECT_ONLY=""
@@ -48,15 +49,18 @@ gen_secret() { od -An -N"$1" -tx1 /dev/urandom | tr -d ' \n'; }
 
 # ---- pieces that can be tested without a card ------------------------------------------------------
 
-# latest_from_listing FILE RELEASE: newest image name in an HTML directory listing
+# latest_from_listing FILE RELEASE: newest image name in an HTML directory listing. Fedora names them
+# Fedora-IoT-raw-44-20260427.0.aarch64.raw.xz (older releases: Fedora-IoT-44-...), so both are accepted.
 latest_from_listing() {
-  grep -o "Fedora-IoT-$2-[0-9.]*\\.aarch64\\.raw\\.xz" "$1" | sort -uV | tail -n 1
+  grep -o "Fedora-IoT-\(raw-\)\{0,1\}$2-[0-9.]*\\.aarch64\\.raw\\.xz" "$1" | sort -u |
+    sed -E 's/^(.*-)([0-9]{8}\.[0-9]+)\.aarch64\.raw\.xz$/\2 &/' | sort -V | tail -n 1 | cut -d' ' -f2
 }
 
 # checksum_file_from_listing FILE RELEASE IMAGE: the CHECKSUM file that goes with that image's build
+# (Fedora-IoT-44-aarch64-20260427.0-CHECKSUM; also the older spellings)
 checksum_file_from_listing() {
-  local build="${3#Fedora-IoT-"$2"-}"; build="${build%.aarch64.raw.xz}"
-  grep -o "Fedora-IoT-$2-$build-aarch64-CHECKSUM\\|Fedora-IoT-$2-aarch64-CHECKSUM" "$1" | sort -u | head -n 1
+  local build; build="$(printf '%s' "$3" | sed -E 's/.*-([0-9]{8}\.[0-9]+)\.aarch64\.raw\.xz$/\1/')"
+  grep -o "Fedora-IoT-$2-aarch64-$build-CHECKSUM\\|Fedora-IoT-$2-$build-aarch64-CHECKSUM\\|Fedora-IoT-$2-aarch64-CHECKSUM" "$1" | sort -u | head -n 1
 }
 
 # expected_sha256 CHECKSUMFILE IMAGE: the hash for IMAGE, from lines like "SHA256 (name) = hash"
@@ -256,7 +260,8 @@ fetch_image() {
   note "Found $name"
   IMAGE="$cache/$name"
   if [ ! -f "$IMAGE" ] || [ -f "$IMAGE.part" ]; then
-    if curl -fL -C - --progress-bar "$url$name" -o "$IMAGE.part"; then
+    if curl -fL -C - --progress-bar "$MIRROR_URL/$RELEASE/IoT/aarch64/images/$name" -o "$IMAGE.part" ||
+       curl -fL -C - --progress-bar "$url$name" -o "$IMAGE.part"; then
       mv "$IMAGE.part" "$IMAGE"
     else
       die "The download failed. Run the command again to resume it."
