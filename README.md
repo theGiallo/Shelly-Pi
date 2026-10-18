@@ -359,7 +359,7 @@ setup hotspot is open until you turn it off, which the wizard does by default.
 
 ## What has been checked, and what hasn't
 
-Tested here: 131 automated tests (storage, rollups, clock handling, prices and costs, backup and restore, automatic USB backups,  the certificate authority and TLS, the SD card preparation script's file handling, wizard against simulated
+Tested here: 140 automated tests (storage, rollups, clock handling, prices and costs, backup and restore, automatic USB backups,  the certificate authority and TLS, the SD card preparation script's file handling, wizard against simulated
 plugs, auth, live updates) and the real pages loaded in a simulated browser (jsdom).
 
 **Not yet tested on real hardware**, so expect to fix things on Sunday: the container build and
