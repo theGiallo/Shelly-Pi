@@ -237,8 +237,9 @@ if systemctl is-active --quiet firewalld; then
   say "Firewall"
   firewall-cmd --permanent --add-service=http >/dev/null
   firewall-cmd --permanent --add-service=https >/dev/null
+  firewall-cmd --permanent --add-service=mdns >/dev/null 2>&1 || warn "Couldn't open mDNS, so shellypi.local may not resolve"
   firewall-cmd --reload >/dev/null
-  note "Ports 80 and 443 are open for the dashboard. The Wi-Fi for the plugs is in the 'trusted' zone."
+  note "Ports 80 and 443 are open for the dashboard, and mDNS (for the shellypi.local name). The Wi-Fi for the plugs is in the 'trusted' zone."
 fi
 
 # ---- 5. clock helpers -------------------------------------------------------------------------------------
@@ -310,6 +311,13 @@ if [ "$CURRENT_HOST" != "$NEW_HOSTNAME" ]; then
   else
     NEW_HOSTNAME="$CURRENT_HOST"
   fi
+fi
+# Answer "<hostname>.local" lookups from the home network.
+if systemctl list-unit-files systemd-resolved.service >/dev/null 2>&1; then
+  install -d -m 0755 /etc/systemd/resolved.conf.d
+  printf '[Resolve]\nMulticastDNS=yes\n' > /etc/systemd/resolved.conf.d/shelly-mdns.conf
+  systemctl enable --now systemd-resolved >/dev/null 2>&1 || true
+  systemctl restart systemd-resolved >/dev/null 2>&1 || true
 fi
 ETH_CON="$(nmcli -t -f NAME,TYPE connection show --active | awk -F: '$2=="802-3-ethernet"{print $1; exit}')"
 if [ -n "$ETH_CON" ]; then
