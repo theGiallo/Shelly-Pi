@@ -15,6 +15,7 @@
 
 .PARAMETER Image    A Fedora IoT .raw.xz (or .raw) you already downloaded.
 .PARAMETER Release  Fedora release number (default: the newest one that has an IoT image).
+.PARAMETER ImageUrl Direct address of the image (ends in .aarch64.raw.xz), if finding it automatically fails.
 .PARAMETER Disk     Number of the SD card disk (otherwise you choose from a list).
 .PARAMETER SkipSd   Don't write a card; the Pi is already running Fedora IoT.
 .PARAMETER Yes      Don't ask for confirmation where it is safe not to.
@@ -23,6 +24,7 @@
 param(
   [string]$Image = "",
   [string]$Release = "",
+  [string]$ImageUrl = "",
   [int]$Disk = -1,
   [switch]$SkipSd,
   [switch]$Yes,
@@ -66,63 +68,99 @@ function Get-File([string]$url, [string]$dest) {
 
 # ---- 1. the Fedora IoT image -----------------------------------------------------------------------------------------
 
-function Get-FedoraImage {
-  # Directory listings and checksums come from Fedora's main server; the big file from a nearby mirror.
-  $listBase = "https://dl.fedoraproject.org/pub/alt/iot"
-  $mirrorBase = "https://download.fedoraproject.org/pub/alt/iot"
-  Say "Looking for the newest Fedora IoT image"
-  $releases = @()
-  if ($Release) {
-    $releases = @($Release)
-  } else {
+# Collects image links from Fedora's download page (the links Fedora itself publishes).
+function Get-CandidatesFromDownloadPage {
+  $out = @()
+  foreach ($page in @("https://fedoraproject.org/iot/download", "https://www.fedoraproject.org/iot/download/")) {
     try {
-      $top = Get-Text "$listBase/"
-      $releases = @([regex]::Matches($top, 'href="(\d+)/"') | ForEach-Object { [int]$_.Groups[1].Value } | Sort-Object -Descending -Unique | Select-Object -First 4)
-    } catch { Warn "Couldn't read the list of releases ($($_.Exception.Message)); trying the usual numbers." }
-    if ($releases.Count -eq 0) { $releases = @(46, 45, 44, 43) }
+      $html = Get-Text $page
+    } catch { Warn "Couldn't read $page ($($_.Exception.Message))"; continue }
+    $imgs = [regex]::Matches($html, "https?://[^\s`"'<>]*?(Fedora-IoT-(?:raw-)?(\d+)-([0-9]{8}\.[0-9]+)\.aarch64\.raw\.xz)")
+    $sums = @([regex]::Matches($html, "https?://[^\s`"'<>]*Fedora-IoT-[^\s`"'<>]*aarch64[^\s`"'<>]*CHECKSUM") | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    foreach ($m in $imgs) {
+      $rel = $m.Groups[2].Value; $build = $m.Groups[3].Value
+      $sum = $sums | Where-Object { $_ -match "Fedora-IoT-$rel-" -and $_ -match [regex]::Escape($build) } | Select-Object -First 1
+      $out += New-Object PSObject -Property @{ Name = $m.Groups[1].Value; Url = $m.Value; SumUrl = $sum; Release = [int]$rel; Build = $build }
+    }
+    if ($out.Count -gt 0) { break }
   }
+  return $out
+}
+
+# Fallback: read the folders on Fedora's main server.
+function Get-CandidatesFromListings {
+  $listBase = "https://dl.fedoraproject.org/pub/alt/iot"
+  $out = @()
+  $releases = @()
+  if ($Release) { $releases = @($Release) } else { $releases = @(48, 47, 46, 45, 44, 43, 42) }
   foreach ($r in $releases) {
     $dir = "$listBase/$r/IoT/aarch64/images/"
-    try { $listing = Get-Text $dir } catch { continue }
-    # Fedora names it Fedora-IoT-raw-44-20260427.0.aarch64.raw.xz (older releases: Fedora-IoT-44-...)
-    $found = @([regex]::Matches($listing, "Fedora-IoT-(?:raw-)?$r-([0-9]{8}\.[0-9]+)\.aarch64\.raw\.xz") |
-      ForEach-Object { New-Object PSObject -Property @{ Name = $_.Value; Build = $_.Groups[1].Value } } | Sort-Object Name -Unique)
-    if ($found.Count -eq 0) { continue }
-    $best = $found | Sort-Object @{ Expression = { $_.Build.Split(".")[0] } }, @{ Expression = { [int]$_.Build.Split(".")[1] } } | Select-Object -Last 1
-    $name = $best.Name
-    $build = $best.Build
-    Note "Found $name"
-    $dest = Join-Path $Cache $name
-    $sumName = ""
-    foreach ($cand in @("Fedora-IoT-$r-aarch64-$build-CHECKSUM", "Fedora-IoT-$r-$build-aarch64-CHECKSUM", "Fedora-IoT-$r-aarch64-CHECKSUM")) {
-      if ($listing.Contains($cand)) { $sumName = $cand; break }
+    try { $listing = Get-Text $dir } catch { Note "No folder for release ${r}: $dir"; continue }
+    foreach ($m in [regex]::Matches($listing, "Fedora-IoT-(?:raw-)?$r-([0-9]{8}\.[0-9]+)\.aarch64\.raw\.xz")) {
+      $build = $m.Groups[1].Value
+      $sum = $null
+      foreach ($cand in @("Fedora-IoT-$r-aarch64-$build-CHECKSUM", "Fedora-IoT-$r-$build-aarch64-CHECKSUM", "Fedora-IoT-$r-aarch64-CHECKSUM")) {
+        if ($listing.Contains($cand)) { $sum = "$dir$cand"; break }
+      }
+      $out += New-Object PSObject -Property @{ Name = $m.Value; Url = "https://download.fedoraproject.org/pub/alt/iot/$r/IoT/aarch64/images/$($m.Value)"; SumUrl = $sum; Release = [int]$r; Build = $build }
     }
-    $want = ""
-    if ($sumName) {
-      $sumText = Get-Text "$dir$sumName"
+    if ($out.Count -gt 0) { break }
+  }
+  return $out
+}
+
+function Get-FedoraImage {
+  Say "Looking for the newest Fedora IoT image"
+  $name = ""; $url = ""; $sumUrl = ""
+  if ($ImageUrl) {
+    $url = $ImageUrl
+    $name = [System.IO.Path]::GetFileName(([Uri]$ImageUrl).AbsolutePath)
+    Warn "Using the address you gave; nothing can be verified for it."
+  } else {
+    $cands = @(Get-CandidatesFromDownloadPage)
+    if ($Release) { $cands = @($cands | Where-Object { $_.Release -eq [int]$Release }) }
+    if ($cands.Count -eq 0) {
+      Note "Fedora's download page didn't give a link; reading Fedora's folders instead."
+      $cands = @(Get-CandidatesFromListings)
+    }
+    if ($cands.Count -eq 0) {
+      Die ("Couldn't find a Fedora IoT aarch64 image. Open https://fedoraproject.org/iot/download in your browser, " +
+           "copy the address of the 'Raw image' for aarch64 (it ends in .aarch64.raw.xz) and run:  install.cmd -ImageUrl <that address>   " +
+           "(or download the file and pass it with -Image).")
+    }
+    $best = $cands | Sort-Object @{ Expression = { $_.Release } }, @{ Expression = { $_.Build.Split(".")[0] } }, @{ Expression = { [int]$_.Build.Split(".")[1] } } | Select-Object -Last 1
+    $name = $best.Name; $url = $best.Url; $sumUrl = $best.SumUrl
+  }
+  Note "Found $name"
+  $dest = Join-Path $Cache $name
+  $want = ""
+  if ($sumUrl) {
+    try {
+      $sumText = Get-Text $sumUrl
       $m = [regex]::Match($sumText, "SHA256 \($([regex]::Escape($name))\) = ([0-9a-fA-F]{64})")
       if ($m.Success) { $want = $m.Groups[1].Value.ToLower() }
-    }
-    if (-not $want) { Warn "No checksum found for this image, so the download can't be verified." }
-    if ((Test-Path $dest) -and $want -and ((Get-FileHash -Algorithm SHA256 $dest).Hash.ToLower() -eq $want)) {
-      Note "Already downloaded and checked."
-      return $dest
-    }
-    Note "Downloading (about 1 GB; a progress bar may appear) ..."
-    try {
-      Get-File "$mirrorBase/$r/IoT/aarch64/images/$name" $dest
-    } catch {
-      Warn "The mirror didn't work ($($_.Exception.Message)); using Fedora's main server instead (slower)."
-      Get-File "$dir$name" $dest
-    }
-    if ($want) {
-      $have = (Get-FileHash -Algorithm SHA256 $dest).Hash.ToLower()
-      if ($have -ne $want) { Remove-Item -Force $dest; Die "The download doesn't match its checksum, so I deleted it. Run this again." }
-      Note "Checksum OK."
-    }
+    } catch { Warn "Couldn't read the checksum file ($($_.Exception.Message))." }
+  }
+  if (-not $want -and -not $ImageUrl) { Warn "No checksum found for this image, so the download can't be verified." }
+  if ((Test-Path $dest) -and $want -and ((Get-FileHash -Algorithm SHA256 $dest).Hash.ToLower() -eq $want)) {
+    Note "Already downloaded and checked."
     return $dest
   }
-  Die "Couldn't find a Fedora IoT aarch64 image under https://dl.fedoraproject.org/pub/alt/iot/. Download one yourself from https://fedoraproject.org/iot/ and pass it with -Image."
+  Note "Downloading (about 1 GB; a progress bar may appear) ..."
+  try {
+    Get-File $url $dest
+  } catch {
+    $alt = $url -replace "^https://download\.fedoraproject\.org/", "https://dl.fedoraproject.org/"
+    if ($alt -eq $url) { Die "The download failed: $($_.Exception.Message)" }
+    Warn "The mirror didn't work ($($_.Exception.Message)); using Fedora's main server instead (slower)."
+    Get-File $alt $dest
+  }
+  if ($want) {
+    $have = (Get-FileHash -Algorithm SHA256 $dest).Hash.ToLower()
+    if ($have -ne $want) { Remove-Item -Force $dest; Die "The download doesn't match its checksum, so I deleted it. Run this again." }
+    Note "Checksum OK."
+  }
+  return $dest
 }
 
 # ---- 2. 7-Zip, to unpack the .xz --------------------------------------------------------------------------------------

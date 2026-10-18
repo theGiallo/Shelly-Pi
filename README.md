@@ -73,6 +73,7 @@ keyboard. The PC needs internet for about 1.2 GB of downloads. The Pi itself doe
 | Option | Meaning |
 | --- | --- |
 | `-Image FILE` | Use a Fedora IoT `.raw.xz` you already have instead of downloading one. |
+| `-ImageUrl ADDRESS` | Download the image from this address (copy it from fedoraproject.org/iot/download) if finding it automatically fails. |
 | `-SkipSd` | The Pi already runs Fedora IoT; only install Shelly-Pi on it. |
 | `-PiHost 192.168.1.50` | The Pi's address, if it can't be found by name. |
 | `-User name` | The Pi user (default: the name you type at the prompt, or `root`). |
@@ -87,6 +88,8 @@ keyboard. The PC needs internet for about 1.2 GB of downloads. The Pi itself doe
 - *The Pi does not boot* (no screen output, the green light never blinks after two minutes): the plain Fedora image
   may need U-Boot copied onto its boot partition for the Pi 4, which Fedora's own `arm-image-installer` does and
   this Windows script does not. Use `scripts/prepare-sd.sh` on a Linux machine instead (it uses that tool).
+- *"Couldn't find a Fedora IoT aarch64 image"*: open <https://fedoraproject.org/iot/download>, copy the address of the aarch64
+  raw image (it ends in `.aarch64.raw.xz`) and run `install.cmd -ImageUrl <address>`, or download it and use `-Image FILE`.
 - *The Pi isn't found*: look for it in your router's device list and use `-PiHost`. SSH only works after the
   first-boot setup has finished. If the port stays closed, log in on the Pi's screen and run
   `sudo systemctl enable --now sshd`.
