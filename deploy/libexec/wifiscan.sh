@@ -23,7 +23,8 @@ ID=$(printf '%s' "$LINE" | awk '{print $1}' | tr -cd 'A-Za-z0-9_-' | head -c 40)
 [ -n "$ID" ] || { echo "wifiscan: request without an id" >&2; exit 1; }
 
 json_str() {
-  printf '%s' "$1" | awk 'BEGIN{ORS=""; printf "\""} {gsub(/\\/,"\\\\"); gsub(/"/,"\\\""); gsub(/[\001-\037]/," "); if (NR>1) printf " "; printf "%s",$0} END{printf "\""}'
+  # tr and sed behave the same everywhere; awk's gsub escaping differs between gawk (Fedora) and mawk (Debian)
+  printf '"%s"' "$(printf '%s' "$1" | tr '\001-\037' ' ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
 }
 answer() {
   mkdir -p "$BRIDGE"
