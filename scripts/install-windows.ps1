@@ -308,11 +308,13 @@ function Ask-LocalImage {
     for ($i = 0; $i -lt $found.Count; $i++) {
       Write-Host ("  [{0}] {1}  - {2} MB, in {3}" -f ($i + 1), $found[$i].Name, [math]::Round($found[$i].Length / 1MB), $found[$i].DirectoryName)
     }
+    Write-Host "  [P] use a file stored somewhere else"
     Write-Host "  [Enter] download the newest one from Fedora"
-    $a = (Read-Host "Type a number to use one of these, or paste the path of another file, or press Enter to download").Trim().Trim('"')
+    $a = (Read-Host "Type a number, P, a file path, or press Enter to download").Trim().Trim('"')
+    if ($a -match "^[pP]$") { $a = (Read-Host "Path of the image file (you can drag the file into this window)").Trim().Trim('"') }
   } else {
     if ($part.Count -gt 0) { Write-Host "An earlier download was interrupted; it will continue where it stopped." -ForegroundColor Cyan }
-    $a = (Read-Host "Do you already have a Fedora IoT image file (.raw.xz) on this PC? Paste its path, or press Enter to download it").Trim().Trim('"')
+    $a = (Read-Host "Path of a Fedora IoT image file (.raw.xz) you already have (you can drag the file into this window), or press Enter to download it").Trim().Trim('"')
   }
   if (-not $a) { return "" }
   if ($a -match "^\d+$" -and [int]$a -ge 1 -and [int]$a -le $found.Count) { return $found[[int]$a - 1].FullName }
