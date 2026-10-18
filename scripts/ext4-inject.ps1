@@ -47,14 +47,21 @@ function Add-RootSshKey {
       [System.IO.File]::WriteAllBytes((Join-Path $tmp "$t.ctx"), $bytes)
     }
     $t = $tmp -replace "\\", "/"
-    $cmds = @(
-      "mkdir $home_",
-      "sif $home_ mode 040700", "sif $home_ uid 0", "sif $home_ gid 0",
-      "ea_set -f $t/admin_home_t.ctx $home_ security.selinux",
-      "mkdir $home_/.ssh",
+    # debugfs "mkdir" on a name that exists still uses up an inode, which leaves the filesystem inconsistent,
+    # so only create what is missing
+    function Test-Exists([string]$path) {
+      return ((Invoke-Debugfs -Debugfs $Debugfs -Target $Target -Request "stat $path") -match "Inode:\s+\d+")
+    }
+    $cmds = @()
+    if (-not (Test-Exists $home_)) {
+      $cmds += @("mkdir $home_", "sif $home_ mode 040700", "sif $home_ uid 0", "sif $home_ gid 0",
+                 "ea_set -f $t/admin_home_t.ctx $home_ security.selinux")
+    }
+    if (-not (Test-Exists "$home_/.ssh")) { $cmds += "mkdir $home_/.ssh" }
+    if (Test-Exists "$home_/.ssh/authorized_keys") { $cmds += "rm $home_/.ssh/authorized_keys" }
+    $cmds += @(
       "sif $home_/.ssh mode 040700", "sif $home_/.ssh uid 0", "sif $home_/.ssh gid 0",
       "ea_set -f $t/ssh_home_t.ctx $home_/.ssh security.selinux",
-      "rm $home_/.ssh/authorized_keys",
       "write $t/key.pub $home_/.ssh/authorized_keys",
       "sif $home_/.ssh/authorized_keys mode 0100600", "sif $home_/.ssh/authorized_keys uid 0", "sif $home_/.ssh/authorized_keys gid 0",
       "ea_set -f $t/ssh_home_t.ctx $home_/.ssh/authorized_keys security.selinux"
