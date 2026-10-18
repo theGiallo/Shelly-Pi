@@ -1,6 +1,6 @@
-# Shelly Monitor
+# Shelly-Pi
 
-A small server for a Raspberry Pi 4 that creates its own Wi-Fi network for Shelly Gen2+
+Shelly-Pi is a small server for a Raspberry Pi 4 that creates its own Wi-Fi network for Shelly Gen2+
 smart plugs (built for the **Plug M Gen3**), shows their power on a web dashboard, and
 switches them on and off. Everything stays on your local network. Nothing needs internet.
 
@@ -95,7 +95,7 @@ Boot the Pi on Ethernet, find its address in your router's device list, and log 
 From your PC:
 
 ```
-scp -r shelly-monitor root@<pi-address>:/root/
+scp -r Shelly-Pi root@<pi-address>:/root/
 ```
 
 The container image has to be built once, which needs internet. Pick one:
@@ -112,7 +112,7 @@ save them in an editor that converts line endings to Windows style.
 Then on the Pi:
 
 ```
-cd /root/shelly-monitor
+cd /root/Shelly-Pi
 sudo bash deploy/setup-host.sh
 ```
 
