@@ -9,6 +9,8 @@
 .PARAMETER Image      The image file. A .raw.xz needs -Extractor.
 .PARAMETER Extractor  Path to 7z.exe or 7zr.exe, used to unpack .xz files while writing.
 .PARAMETER Disk       Disk number to write to (see Disk Management). Without it, you choose from a list.
+.PARAMETER ToolsDir   Folder with debugfs.exe and e2fsck.exe. With -PublicKey, the key is added to the card's root account.
+.PARAMETER PublicKey  Public SSH key file to let in as root, so the Pi needs no login setup.
 .PARAMETER Yes        Don't ask for confirmation. Only works together with -Disk.
 #>
 [CmdletBinding()]
@@ -16,6 +18,8 @@ param(
   [Parameter(Mandatory = $true)][string]$Image,
   [string]$Extractor = "",
   [int]$Disk = -1,
+  [string]$ToolsDir = "",
+  [string]$PublicKey = "",
   [switch]$Yes
 )
 
@@ -197,6 +201,24 @@ public static class SdWriter {
   Start-Sleep -Seconds 3
   $parts = @(Get-Partition -DiskNumber $n -ErrorAction SilentlyContinue)
   Note ("The card now has {0} partitions." -f $parts.Count)
+
+  $keyAdded = $false
+  if ($ToolsDir -and $PublicKey) {
+    Say "Letting your PC log in to the Pi (adding your SSH key to the card)"
+    try {
+      . (Join-Path $PSScriptRoot "ext4-inject.ps1")
+      Add-RootSshKeyToDisk -DiskNumber $n -ToolsDir $ToolsDir -PublicKeyFile $PublicKey -WorkDir $env:TEMP
+      $keyAdded = $true
+      Note "Done. The Pi will accept your PC's key for the 'root' account."
+    } catch {
+      Warn "Couldn't add the key: $($_.Exception.Message)"
+      Warn "The card is written and still good, but the Pi will need a user created on its own screen and keyboard."
+    }
+    try { Set-Disk -Number $n -IsOffline $false -ErrorAction SilentlyContinue } catch { }
+    try { Update-Disk -Number $n -ErrorAction SilentlyContinue } catch { }
+    Start-Sleep -Seconds 2
+    $parts = @(Get-Partition -DiskNumber $n -ErrorAction SilentlyContinue)
+  }
   Warn "Windows may say it must format some drives on this card. Click Cancel each time: those are Linux partitions it can't read."
   try {
     # Eject the one drive Windows can read, so everything is flushed and the card can be pulled out safely.
@@ -210,6 +232,7 @@ public static class SdWriter {
   Say "The SD card is written"
   Note "Take it out of the reader. If Windows still shows it, use 'Safely remove hardware' first."
   Read-Host "Press Enter to close this window" | Out-Null
+  if ($ToolsDir -and $PublicKey -and -not $keyAdded) { exit 2 }
   exit 0
 } catch {
   Fail $_.Exception.Message

@@ -295,6 +295,49 @@ function Get-SevenZip {
   return $dest
 }
 
+function Get-PublicKey {
+  # the PC's public SSH key; makes one if there is none. It goes on the card so the Pi lets this PC in.
+  $sshDir = Join-Path $env:USERPROFILE ".ssh"
+  foreach ($k in @("id_ed25519.pub", "id_ecdsa.pub", "id_rsa.pub")) {
+    $cand = Join-Path $sshDir $k
+    if (Test-Path $cand) { return $cand }
+  }
+  if (-not (Get-Command ssh-keygen -ErrorAction SilentlyContinue)) {
+    Die "Windows' OpenSSH client isn't installed. Add it in Settings > System > Optional features (OpenSSH Client), then start this again."
+  }
+  Say "You don't have an SSH key yet"
+  Note "I'll make one now. Pick a passphrase if you like (Enter for none)."
+  New-Item -ItemType Directory -Force -Path $sshDir | Out-Null
+  $newKey = Join-Path $sshDir "id_ed25519"
+  & ssh-keygen -t ed25519 -f $newKey
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$newKey.pub")) { Die "Couldn't make an SSH key. Run ssh-keygen yourself, then start this again." }
+  return "$newKey.pub"
+}
+
+function Get-Ext4Tools {
+  # debugfs.exe and e2fsck.exe, built and tested by this project's CI and published with its releases
+  $dir = Join-Path $Cache "ext4-tools"
+  if ((Test-Path (Join-Path $dir "debugfs.exe")) -and (Test-Path (Join-Path $dir "e2fsck.exe"))) { return $dir }
+  Say "Getting the small tool that puts your SSH key on the card"
+  $base = "https://github.com/theGiallo/Shelly-Pi/releases/latest/download"
+  $zip = Join-Path $Cache "ext4-tools-windows.zip"
+  try {
+    $sumText = Get-Text "$base/ext4-tools-windows.zip.sha256"
+    $want = ([regex]::Match($sumText, "[0-9a-fA-F]{64}")).Value.ToLower()
+    if (-not $want) { throw "no checksum" }
+    Get-File "$base/ext4-tools-windows.zip" $zip
+    if ((Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower() -ne $want) { Remove-Item -Force $zip; throw "the download is damaged (checksum differs)" }
+    if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
+    Expand-Archive -Path $zip -DestinationPath $dir -Force
+    if (-not (Test-Path (Join-Path $dir "debugfs.exe")) -or -not (Test-Path (Join-Path $dir "e2fsck.exe"))) { throw "the archive is missing programs" }
+    Note "Got it."
+    return $dir
+  } catch {
+    Warn "Couldn't get it ($($_.Exception.Message)). The Pi will then need a user created on its own screen and keyboard."
+    return ""
+  }
+}
+
 function Ask-LocalImage {
   # Looks for Fedora IoT image files already on this PC and asks which one to use. Returns a path, or "" to download.
   $found = @()
@@ -330,7 +373,7 @@ if (-not $SkipSd) {
   Write-Host ""
   Write-Host "Shelly-Pi installer for Windows" -ForegroundColor Cyan
   Write-Host "  You need: the Raspberry Pi 4 with its power supply, a microSD card (16 GB or more) in a card"
-  Write-Host "  reader on this PC, an Ethernet cable to your router, and a screen and keyboard for the Pi's first start."
+  Write-Host "  reader on this PC, and an Ethernet cable to your router. No screen or keyboard is needed."
   Write-Host "  The card will be ERASED. This takes 15 to 40 minutes, mostly download and writing."
 
   if ($Image) {
@@ -353,11 +396,15 @@ if (-not $SkipSd) {
     Note "The archive is intact."
   }
 
+  $keyFile = Get-PublicKey
+  $tools = Get-Ext4Tools
+
   Say "Writing the SD card"
   Note "A window will ask for administrator rights, then ask which disk is the card."
   $flash = Join-Path $Here "flash-sd.ps1"
   $argLine = "-NoProfile -ExecutionPolicy Bypass -File `"$flash`" -Image `"$imagePath`""
   if ($extractor) { $argLine += " -Extractor `"$extractor`"" }
+  if ($tools) { $argLine += " -ToolsDir `"$tools`" -PublicKey `"$keyFile`"" }
   if ($Disk -ge 0) { $argLine += " -Disk $Disk" }
   if ($Yes -and $Disk -ge 0) { $argLine += " -Yes" }
   try {
@@ -365,26 +412,34 @@ if (-not $SkipSd) {
   } catch {
     Die "The card writer couldn't start (was the administrator prompt declined?): $($_.Exception.Message)"
   }
-  if ($p.ExitCode -ne 0) { Die "Writing the card didn't finish (see the other window). Nothing else was done." }
+  $keyOnCard = [bool]$tools
+  if ($p.ExitCode -eq 2) { $keyOnCard = $false }
+  elseif ($p.ExitCode -ne 0) { Die "Writing the card didn't finish (see the other window). Nothing else was done." }
 
   Say "Start the Pi"
   Write-Host "  1. Put the SD card in the Pi."
   Write-Host "  2. Plug the Pi into your router with an Ethernet cable."
-  Write-Host "  3. Connect a screen and keyboard to the Pi, then plug in its power."
-  Write-Host "  4. Fedora's first-boot setup may ask you to create a user. If it does, make one with an"
-  Write-Host "     administrator account and remember its name and password."
-  Write-Host "  5. When the Pi shows a login prompt, come back here."
-  Write-Host ""
-  Write-Host "  If the Pi shows nothing and its green light never blinks after a couple of minutes, it did not"
-  Write-Host "  boot from the card; see 'The Pi does not boot' in the README." -ForegroundColor Yellow
-  Write-Host ""
-  $answer = Read-Host "User name you created on the Pi (just press Enter if there was no setup and root accepts your key)"
-  if ($answer.Trim()) { $user = $answer.Trim() }
+  Write-Host "  3. Plug in the Pi's power."
+  if ($keyOnCard) {
+    Write-Host "  4. Wait about 2 minutes. The Pi starts for the first time and makes its login keys."
+    Write-Host ""
+    Write-Host "  Your PC's key is already on the card, so there is nothing to type on the Pi."
+    Write-Host ""
+    [void](Read-Host "Press Enter when two minutes have passed")
+  } else {
+    Write-Host "  4. This card has no way in yet. Connect a screen and keyboard, and when Fedora offers to create a"
+    Write-Host "     user, make an administrator account and remember its name and password."
+    Write-Host "  5. When the Pi shows a login prompt, come back here."
+    Write-Host ""
+    $answer = Read-Host "User name you created on the Pi"
+    if ($answer.Trim()) { $user = $answer.Trim() }
+  }
 }
 
 Say "Installing Shelly-Pi on the Pi"
 $forward = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $Here "install.ps1")) + $Rest
 if (-not ($Rest -contains "-User")) { $forward += @("-User", $user) }
+if ($keyFile -and -not ($Rest -contains "-KeyFile")) { $forward += @("-KeyFile", $keyFile) }
 if ($Yes) { $forward += "-Yes" }
 & powershell.exe @forward
 exit $LASTEXITCODE

@@ -30,3 +30,23 @@ jobs:
             grep -E "^(FAILED|ERROR)|Error" pytest.log | head -15 | while IFS= read -r l; do echo "::error::${l:0:250}"; done
             exit 1
           }
+
+  powershell-syntax:
+    # The Windows scripts can only be run on Windows, but PowerShell's own parser can at least catch typos here.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse every .ps1 file
+        shell: pwsh
+        run: |
+          $bad = 0
+          foreach ($f in Get-ChildItem -Recurse -Filter *.ps1 -File) {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors)
+            foreach ($e in $errors) {
+              $bad++
+              Write-Host ("::error file=" + $f.FullName.Replace($PWD.Path + "/", "") + ",line=" + $e.Extent.StartLineNumber + "::" + $e.Message)
+            }
+          }
+          if ($bad -gt 0) { exit 1 }
+          Write-Host "All PowerShell scripts parse."
