@@ -1,0 +1,121 @@
+name: Windows ext4 tools
+
+# Builds the small debugfs.exe bundle the Windows installer uses to put an SSH key on the Pi's Linux partition,
+# and tests it on a real Windows machine: first against an image file, then against a virtual disk through a
+# \\.\PhysicalDrive path, the same way the installer addresses the SD card.
+#
+#   Releases > Publish     -> builds, tests, attaches ext4-tools-windows.zip to the release
+#   Actions tab > Run      -> builds and tests; download from the run's artifacts
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/ext4-tools.yml"
+      - "scripts/ext4-inject.ps1"
+
+permissions:
+  contents: write
+
+jobs:
+  tools:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          update: false
+          install: e2fsprogs
+
+      - name: Collect debugfs.exe and the libraries it needs
+        shell: msys2 {0}
+        run: |
+          mkdir -p out/ext4-tools
+          cp /usr/bin/debugfs.exe out/ext4-tools/
+          for dll in $(ldd /usr/bin/debugfs.exe | awk '/\/usr\/bin\// {print $3}'); do cp "$dll" out/ext4-tools/; done
+          cp /usr/bin/mke2fs.exe out/mke2fs.exe
+          for dll in $(ldd /usr/bin/mke2fs.exe | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/; done
+          cp /usr/bin/e2fsck.exe out/e2fsck.exe
+          for dll in $(ldd /usr/bin/e2fsck.exe | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/; done
+          cp out/ext4-tools/*.dll out/ 2>/dev/null || true
+          ls -l out out/ext4-tools
+
+      - name: Test against an image file (tools run from a plain folder, no MSYS on the path)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $out = Join-Path $PWD "out"
+          # a fake Fedora IoT root: /ostree/deploy/fedora-iot/var/roothome
+          $root = Join-Path $out "root"
+          New-Item -ItemType Directory -Force -Path "$root/ostree/deploy/fedora-iot/var/roothome" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$root/ostree/deploy/fedora-iot/deploy/abc.0/etc" | Out-Null
+          $img = Join-Path $out "root.ext4"
+          $fs = [System.IO.File]::Create($img); $fs.SetLength(64MB); $fs.Close()
+          $rootU = ($root -replace "\\", "/")
+          $imgU = ($img -replace "\\", "/")
+          & "$out/mke2fs.exe" -q -F -t ext4 -O metadata_csum,64bit,extent -d $rootU $imgU
+          if ($LASTEXITCODE -ne 0) { throw "mke2fs failed" }
+          ssh-keygen -q -t ed25519 -N '""' -f "$out/testkey"
+          . ./scripts/ext4-inject.ps1
+          Add-RootSshKey -Debugfs "$out/ext4-tools/debugfs.exe" -Target $imgU -PublicKeyFile "$out/testkey.pub"
+          # again: running it twice must work too
+          Add-RootSshKey -Debugfs "$out/ext4-tools/debugfs.exe" -Target $imgU -PublicKeyFile "$out/testkey.pub"
+          & "$out/e2fsck.exe" -fn $imgU
+          if ($LASTEXITCODE -ne 0) { throw "e2fsck found problems after writing" }
+          Write-Host "image file test passed"
+
+      - name: Test against a virtual disk through a PhysicalDrive path
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = "Stop"
+          $out = Join-Path $PWD "out"
+          $vhd = Join-Path $env:RUNNER_TEMP "ext4test.vhd"
+          @"
+          create vdisk file="$vhd" maximum=200 type=fixed
+          select vdisk file="$vhd"
+          attach vdisk
+          convert gpt
+          create partition primary
+          "@ | Out-File -Encoding ascii "$env:RUNNER_TEMP\dp.txt"
+          diskpart /s "$env:RUNNER_TEMP\dp.txt"
+          $d = Get-Disk | Where-Object { $_.Location -like "*ext4test.vhd*" -or $_.FriendlyName -like "*Virtual*" } | Select-Object -Last 1
+          $n = $d.Number
+          $p = Get-Partition -DiskNumber $n | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
+          Write-Host "disk $n partition offset $($p.Offset) size $($p.Size)"
+          $target = "//./PhysicalDrive$n?offset=$($p.Offset)"
+          # make an ext4 filesystem inside that partition, then add the key, as the installer does on the card
+          & "$out/mke2fs.exe" -q -F -t ext4 -O metadata_csum,64bit,extent $target "$([int]($p.Size / 1024 - 64))"
+          # (the fake OS tree is created with debugfs, since this filesystem is new and empty)
+          $cf = Join-Path $out "mk.txt"
+          "mkdir /ostree`nmkdir /ostree/deploy`nmkdir /ostree/deploy/fedora-iot`nmkdir /ostree/deploy/fedora-iot/var`n" | Out-File -Encoding ascii $cf
+          & "$out/ext4-tools/debugfs.exe" -w -f ($cf -replace "\\", "/") $target
+          . ./scripts/ext4-inject.ps1
+          Add-RootSshKey -Debugfs "$out/ext4-tools/debugfs.exe" -Target $target -PublicKeyFile "$out/testkey.pub"
+          Write-Host "physical drive test passed"
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          Compress-Archive -Path out/ext4-tools/* -DestinationPath ext4-tools-windows.zip
+          (Get-FileHash -Algorithm SHA256 ext4-tools-windows.zip).Hash.ToLower() + "  ext4-tools-windows.zip" | Out-File -Encoding ascii ext4-tools-windows.zip.sha256
+          Get-Item ext4-tools-windows.zip*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ext4-tools-windows
+          path: |
+            ext4-tools-windows.zip
+            ext4-tools-windows.zip.sha256
+          retention-days: 14
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" ext4-tools-windows.zip ext4-tools-windows.zip.sha256 --clobber
