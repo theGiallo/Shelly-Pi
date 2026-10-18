@@ -205,6 +205,71 @@ jobs:
           $parts = @(Get-Partition -DiskNumber $nb -ErrorAction SilentlyContinue)
           Write-Host "::notice::card now has $($parts.Count) partition(s); card writer test passed"
 
+      - name: Same, with an old-style (MBR) partition table
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          trap { Write-Host ("::error::" + ($_.Exception.Message -replace "[\r\n]+", " | ") + " AT " + ($_.InvocationInfo.PositionMessage -replace "[\r\n]+", " | ")); exit 1 }
+          $out = Join-Path $PWD "out"
+          . ./scripts/ext4-inject.ps1
+          Add-Type -TypeDefinition ([System.IO.File]::ReadAllText((Join-Path $PWD "scripts/sd-writer.cs")))
+          $fsimg = Join-Path $out "fs.ext4"      # a Fedora-like root file system, from the earlier step
+          # 1. build a GPT disk image: virtual disk A with one partition holding that file system
+          $vhdA = Join-Path $env:RUNNER_TEMP "imageA2.vhd"
+          @"
+          create vdisk file="$vhdA" maximum=200 type=fixed
+          select vdisk file="$vhdA"
+          attach vdisk
+          convert mbr
+          create partition primary size=120
+          "@ | Out-File -Encoding ascii "$env:RUNNER_TEMP\a2.txt"
+          diskpart /s "$env:RUNNER_TEMP\a2.txt" | Out-Null
+          $dA = Get-DiskImage -ImagePath $vhdA | Get-Disk
+          $na = $dA.Number
+          if ($dA.IsSystem -or $dA.IsBoot -or $na -eq 0) { throw "refusing disk $na" }
+          $pa = Get-Partition -DiskNumber $na | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
+          Set-Disk -Number $na -IsOffline $true
+          $zero = Join-Path $out "zero3.img"; $z = [System.IO.File]::Create($zero); $z.SetLength(100MB); $z.Close()
+          [void][RawPart]::WriteBack("\\.\PhysicalDrive$na", [long]$pa.Offset, $zero, $fsimg)
+          $raw = Join-Path $out "disk2.raw"
+          [RawPart]::CopyOut("\\.\PhysicalDrive$na", 0, [long]$dA.Size, $raw)
+          Dismount-DiskImage -ImagePath $vhdA | Out-Null
+          # 2. virtual disk B: blank, no partition table, like a card after Clear-Disk
+          $vhdB = Join-Path $env:RUNNER_TEMP "cardB2.vhd"
+          @"
+          create vdisk file="$vhdB" maximum=300 type=fixed
+          select vdisk file="$vhdB"
+          attach vdisk
+          "@ | Out-File -Encoding ascii "$env:RUNNER_TEMP\b2.txt"
+          diskpart /s "$env:RUNNER_TEMP\b2.txt" | Out-Null
+          $dB = Get-DiskImage -ImagePath $vhdB | Get-Disk
+          $nb = $dB.Number
+          if ($dB.IsSystem -or $dB.IsBoot -or $nb -eq 0) { throw "refusing disk $nb" }
+          Write-Host "::notice::card disk $nb partition style $($dB.PartitionStyle)"
+          $deviceB = "\\.\PhysicalDrive$nb"
+          $script:called = $false
+          $keyFile = "$out/testkey.pub"
+          $tools = "$out/ext4-tools"
+          $hook = [Action[long, long]]{
+            param($off, $size)
+            Write-Host "::notice::hook called with offset $off size $size"
+            Add-RootSshKeyAt -Device $deviceB -Offset $off -Size $size -ToolsDir $tools -PublicKeyFile $keyFile -WorkDir $env:RUNNER_TEMP
+            $script:called = $true
+          }
+          $stream = [System.IO.File]::OpenRead($raw)
+          try { $written = [SdWriter]::Write($stream, $deviceB, [long]$dB.Size, [long]$stream.Length, $hook) } finally { $stream.Dispose() }
+          if (-not $script:called) { throw "the hook was never called" }
+          # 3. read the partition back from B and look for the key
+          $back = Join-Path $out "back3.img"
+          [RawPart]::CopyOut($deviceB, [long]$pa.Offset, 100MB, $back)
+          $got = & "$out/ext4-tools/debugfs.exe" -R "cat /ostree/deploy/fedora-iot/var/roothome/.ssh/authorized_keys" ($back -replace "\\", "/") 2>&1 | ForEach-Object { "$_" }
+          $want = (Get-Content "$keyFile" -Raw).Trim()
+          if (($got -join "`n") -notmatch [regex]::Escape($want)) { throw ("key not on the card afterwards: " + ($got -join " | ")) }
+          # and the partition table must have been written last, so the disk now shows the partition
+          Update-Disk -Number $nb
+          $parts = @(Get-Partition -DiskNumber $nb -ErrorAction SilentlyContinue)
+          Write-Host "::notice::card now has $($parts.Count) partition(s); card writer test passed"
+
       - name: Pack
         shell: pwsh
         run: |
