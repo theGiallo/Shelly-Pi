@@ -49,13 +49,13 @@ jobs:
         shell: msys2 {0}
         run: |
           mkdir -p out/ext4-tools
-          cp /usr/local/sbin/debugfs.exe out/ext4-tools/
-          for dll in $(ldd /usr/local/sbin/debugfs.exe | awk '/\/usr\/bin\// {print $3}'); do cp "$dll" out/ext4-tools/; done
-          cp /usr/local/sbin/mke2fs.exe out/mke2fs.exe
-          for dll in $(ldd /usr/local/sbin/mke2fs.exe | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/; done
-          cp /usr/local/sbin/e2fsck.exe out/e2fsck.exe
-          for dll in $(ldd /usr/local/sbin/e2fsck.exe | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/; done
-          cp out/ext4-tools/*.dll out/ 2>/dev/null || true
+          cp src/debugfs/debugfs.exe out/ext4-tools/
+          cp src/misc/mke2fs.exe src/e2fsck/e2fsck.exe out/
+          cp /usr/bin/msys-2.0.dll out/ext4-tools/
+          for exe in out/ext4-tools/debugfs.exe out/mke2fs.exe out/e2fsck.exe; do
+            for dll in $(ldd "$exe" | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/ext4-tools/; done
+          done
+          cp out/ext4-tools/*.dll out/
           ls -l out out/ext4-tools
 
       - name: Test against an image file (tools run from a plain folder, no MSYS on the path)
