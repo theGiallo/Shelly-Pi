@@ -51,6 +51,7 @@ jobs:
           mkdir -p out/ext4-tools
           cp src/debugfs/debugfs.exe out/ext4-tools/
           cp src/misc/mke2fs.exe src/e2fsck/e2fsck.exe out/
+          cp src/e2fsck/e2fsck.exe out/ext4-tools/
           cp /usr/bin/msys-2.0.dll out/ext4-tools/
           for exe in out/ext4-tools/debugfs.exe out/mke2fs.exe out/e2fsck.exe; do
             for dll in $(ldd "$exe" | awk '/\/usr\/bin\// {print $3}'); do cp -n "$dll" out/ext4-tools/; done
@@ -85,63 +86,53 @@ jobs:
           if ($code -ne 0) { throw ("e2fsck exit code $code : " + ($fsck -join " | ")) }
           Write-Host "image file test passed"
 
-      - name: Test against a virtual disk through a PhysicalDrive path
+      - name: Test against a virtual disk (the way the installer treats the SD card)
         shell: pwsh
-        continue-on-error: true
         run: |
-          Write-Host "::notice::vhd step started"
           $ErrorActionPreference = "Stop"
           trap { Write-Host ("::error::" + ($_.Exception.Message -replace "[\r\n]+", " | ") + " AT " + ($_.InvocationInfo.PositionMessage -replace "[\r\n]+", " | ")); exit 1 }
           $out = Join-Path $PWD "out"
+          . ./scripts/ext4-inject.ps1
+          # a fake Fedora IoT root file system, made as an image file
+          $root = Join-Path $out "root2"
+          New-Item -ItemType Directory -Force -Path "$root/ostree/deploy/fedora-iot/var/roothome" | Out-Null
+          $img = Join-Path $out "fs.ext4"
+          $fs = [System.IO.File]::Create($img); $fs.SetLength(100MB); $fs.Close()
+          & "$out/mke2fs.exe" -q -F -t ext4 -O metadata_csum,64bit,extent -d ($root -replace "\\", "/") ($img -replace "\\", "/")
+          if ($LASTEXITCODE -ne 0) { throw "mke2fs failed" }
+          # a virtual disk with one partition, as a stand-in for the card
           $vhd = Join-Path $env:RUNNER_TEMP "ext4test.vhd"
           @"
           create vdisk file="$vhd" maximum=200 type=fixed
           select vdisk file="$vhd"
           attach vdisk
           convert gpt
-          create partition primary
+          create partition primary size=120
           "@ | Out-File -Encoding ascii "$env:RUNNER_TEMP\dp.txt"
-          $dpout = diskpart /s "$env:RUNNER_TEMP\dp.txt" 2>&1 | ForEach-Object { "$_" }
-          Write-Host ("::notice::diskpart exit $LASTEXITCODE : " + (($dpout -join " | ") -replace "[\r\n]+", " | "))
+          diskpart /s "$env:RUNNER_TEMP\dp.txt" | Out-Null
           $d = Get-DiskImage -ImagePath $vhd | Get-Disk
           $n = $d.Number
           if ($d.IsSystem -or $d.IsBoot -or $n -eq 0) { throw "refusing to use disk ${n}: it looks like the system disk" }
           $p = Get-Partition -DiskNumber $n | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
-          Write-Host "::notice::disk $n partition offset $($p.Offset) size $($p.Size) style $($d.PartitionStyle)"
-          $target = "//./PhysicalDrive${n}?offset=$($p.Offset)"
-          # the Cygwin layer's own name for that partition: disk 2 partition 1 is /dev/sdc1
-          $target = "/dev/sd" + [char](97 + $n) + $p.PartitionNumber
-          Write-Host "::notice::using $target"
-          # Windows blocks raw writes into partitions it has mounted; an offline disk has none
+          Write-Host "::notice::disk $n partition offset $($p.Offset) size $($p.Size)"
+          # put the file system into the partition (what writing the card does), with the disk offline
           Set-Disk -Number $n -IsOffline $true
-          Write-Host "::notice::disk $n offline: $((Get-Disk -Number $n).IsOffline)"
-          function Warnout($label, $text) { Write-Host ("::warning::" + $label + ": " + (($text -join " | ") -replace "[\r\n]+", " | ")) }
-          # make an ext4 filesystem inside that partition, then add the key, as the installer does on the card
-          $kb = [int]($p.Size / 1024 - 64)
-          $o1 = & "$out/mke2fs.exe" -q -F -t ext4 -O metadata_csum,64bit,extent $target $kb 2>&1 | ForEach-Object { "$_" }
-          Warnout "mke2fs exit $LASTEXITCODE target=$target kb=$kb" $o1
-          $o2 = & "$out/ext4-tools/debugfs.exe" -R "ls -p /" $target 2>&1 | ForEach-Object { "$_" }
-          Warnout "debugfs ls / exit $LASTEXITCODE" $o2
-          $cf = Join-Path $out "mk.txt"
-          [System.IO.File]::WriteAllText($cf, "mkdir /ostree`nmkdir /ostree/deploy`nmkdir /ostree/deploy/fedora-iot`nmkdir /ostree/deploy/fedora-iot/var`n")
-          $o3 = & "$out/ext4-tools/debugfs.exe" -w -f ($cf -replace "\\", "/") $target 2>&1 | ForEach-Object { "$_" }
-          Warnout "debugfs mkdir exit $LASTEXITCODE" $o3
-          $o4 = & "$out/ext4-tools/debugfs.exe" -R "ls -p /ostree/deploy" $target 2>&1 | ForEach-Object { "$_" }
-          Warnout "debugfs ls deploy" $o4
-          . ./scripts/ext4-inject.ps1
-          Add-RootSshKey -Debugfs "$out/ext4-tools/debugfs.exe" -Target $target -PublicKeyFile "$out/testkey.pub"
-          Write-Host "physical drive test passed"
-
-      - name: Show the virtual disk test log
-        if: always()
-        shell: pwsh
-        run: |
-          $f = "$env:RUNNER_TEMP\vhd.log"
-          if (Test-Path $f) {
-            $t = (Get-Content -Raw $f) -replace "[\r\n]+", " | "
-            if ($t.Length -gt 3500) { $t = $t.Substring($t.Length - 3500) }
-            Write-Host "::warning::VHDLOG $t"
-          } else { Write-Host "::warning::VHDLOG no log file" }
+          $zero = Join-Path $out "zero.img"
+          $z = [System.IO.File]::Create($zero); $z.SetLength(100MB); $z.Close()
+          $device = "\\.\PhysicalDrive$n"
+          $pieces = [RawPart]::WriteBack($device, [long]$p.Offset, $zero, $img)
+          Write-Host "::notice::filesystem written into the partition: $pieces MB"
+          Set-Disk -Number $n -IsOffline $false
+          # now the real thing
+          Add-RootSshKeyToDisk -DiskNumber $n -ToolsDir "$out/ext4-tools" -PublicKeyFile "$out/testkey.pub" -WorkDir $env:RUNNER_TEMP -MinSize 10MB
+          # read it back from the disk and look
+          Set-Disk -Number $n -IsOffline $true
+          $back = Join-Path $out "back.img"
+          [RawPart]::CopyOut($device, [long]$p.Offset, 100MB, $back)
+          $got = & "$out/ext4-tools/debugfs.exe" -R "cat /ostree/deploy/fedora-iot/var/roothome/.ssh/authorized_keys" ($back -replace "\\", "/") 2>&1 | ForEach-Object { "$_" }
+          $want = (Get-Content "$out/testkey.pub" -Raw).Trim()
+          if (($got -join "`n") -notmatch [regex]::Escape($want)) { throw ("key not found on the disk afterwards: " + ($got -join " | ")) }
+          Write-Host "::notice::virtual disk test passed"
 
       - name: Pack
         shell: pwsh
