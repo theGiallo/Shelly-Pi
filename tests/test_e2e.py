@@ -80,9 +80,14 @@ def test_full_flow_adopt_poll_switch_history(run_app, plugs):
     # whose average mixes off and on samples; the bucket maximum shows the real load
     pmax = [v for v in hist["p_max"] if v]
     assert pmax and max(pmax) > 70 and any(v for v in hist["p_avg"])
-    assert sum(v for v in hist["e_wh"] if v) > 0
-    since = h.client.get("/api/state", params={"since": now - 3600}).json()["devices"][0]
+    # energy is a few hundredths of a watt-hour this early on, so wait until it has grown past rounding
+    def energy_since():
+        d = h.client.get("/api/state", params={"since": now - 3600}).json()["devices"][0]
+        return d if d["energy_since_wh"] > 0 else None
+    since = h.wait_for(energy_since, timeout=15)
     assert since["energy_since_wh"] > 0
+    hist = h.client.get("/api/history", params={"device": dev_id, "from": now - 120, "to": int(time.time()) + 2, "points": 60}).json()
+    assert sum(v for v in hist["e_wh"] if v) > 0
 
     # toggle, then edit and remove
     assert h.client.post(f"/api/devices/{dev_id}/switch", json={}).json()["output"] is False
