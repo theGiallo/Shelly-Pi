@@ -79,8 +79,10 @@ jobs:
           Add-RootSshKey -Debugfs "$out/ext4-tools/debugfs.exe" -Target $imgU -PublicKeyFile "$out/testkey.pub"
           # again: running it twice must work too
           Add-RootSshKey -Debugfs "$out/ext4-tools/debugfs.exe" -Target $imgU -PublicKeyFile "$out/testkey.pub"
-          & "$out/e2fsck.exe" -fn $imgU
-          if ($LASTEXITCODE -ne 0) { throw "e2fsck found problems after writing" }
+          $fsck = & "$out/e2fsck.exe" -fn $imgU 2>&1 | ForEach-Object { "$_" }
+          $code = $LASTEXITCODE
+          Write-Host ($fsck -join "`n")
+          if ($code -ne 0) { throw ("e2fsck exit code $code : " + ($fsck -join " | ")) }
           Write-Host "image file test passed"
 
       - name: Test against a virtual disk through a PhysicalDrive path
