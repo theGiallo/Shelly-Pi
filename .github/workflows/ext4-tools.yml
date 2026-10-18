@@ -109,6 +109,9 @@ jobs:
           $p = Get-Partition -DiskNumber $n | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
           Write-Host "::notice::disk $n partition offset $($p.Offset) size $($p.Size) style $($d.PartitionStyle)"
           $target = "//./PhysicalDrive${n}?offset=$($p.Offset)"
+          # Windows blocks raw writes into partitions it has mounted; an offline disk has none
+          Set-Disk -Number $n -IsOffline $true
+          Write-Host "::notice::disk $n offline: $((Get-Disk -Number $n).IsOffline)"
           function Warnout($label, $text) { Write-Host ("::warning::" + $label + ": " + (($text -join " | ") -replace "[\r\n]+", " | ")) }
           # make an ext4 filesystem inside that partition, then add the key, as the installer does on the card
           $kb = [int]($p.Size / 1024 - 64)
