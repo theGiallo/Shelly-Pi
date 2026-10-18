@@ -196,7 +196,9 @@ function Get-FedoraImage {
         }
       }
       if (-not $want) {
-        Warn "Read $sumUrl but it has no line for $name. What it lists:"
+        $snip = ($sumText -replace "\s+", " "); $snip = $snip.Substring(0, [math]::Min(200, $snip.Length))
+        Warn "Read $sumUrl but it has no line for $name. It starts with: $snip"
+        Warn "Hash lines it contains:"
         foreach ($line in ($sumText -split "`n")) { if ($line -match "[0-9a-fA-F]{64}") { Write-Host ("      " + $line.Trim().Substring(0, [math]::Min(110, $line.Trim().Length))) } }
       }
     } catch { Warn "Couldn't read the checksum file ($($_.Exception.Message))." }
@@ -281,6 +283,15 @@ if (-not $SkipSd) {
   }
   $extractor = ""
   if ($imagePath -match "\.xz$") { $extractor = Get-SevenZip }
+  if ($extractor) {
+    Say "Checking the downloaded file"
+    $ErrorActionPreference = "Continue"
+    & $extractor t -bd -y $imagePath | Out-Null
+    $bad = ($LASTEXITCODE -ne 0)
+    $ErrorActionPreference = "Stop"
+    if ($bad) { Die "The image file is damaged (it fails its built-in integrity test). Delete it from the cache folder and run this again." }
+    Note "The archive is intact."
+  }
 
   Say "Writing the SD card"
   Note "A window will ask for administrator rights, then ask which disk is the card."
