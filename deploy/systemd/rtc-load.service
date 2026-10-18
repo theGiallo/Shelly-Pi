@@ -1,0 +1,11 @@
+[Unit]
+Description=Load the system clock from the DS3231 hardware clock
+# Started by the udev rule 90-shelly-rtc.rules when /dev/rtc0 appears, so a Pi
+# without the clock module installed does not wait for a device that is not there.
+Before=time-sync.target
+Wants=time-sync.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/hwclock --hctosys --utc

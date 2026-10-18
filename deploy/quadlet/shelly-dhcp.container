@@ -1,0 +1,27 @@
+# Quadlet unit (podman-systemd). Installed to /etc/containers/systemd/ by setup-host.sh.
+# Generates shelly-dhcp.service: the DHCP server for the plugs' Wi-Fi network.
+[Unit]
+Description=Shelly Monitor DHCP server for the plug Wi-Fi
+Wants=network-online.target
+After=network-online.target NetworkManager.service
+
+[Container]
+Image=localhost/shelly-monitor:latest
+ContainerName=shelly-dhcp
+Network=host
+# DHCP needs raw sockets and ARP entries. SELinux's default container policy
+# does not allow NET_ADMIN, so labelling is switched off for this one container.
+AddCapability=NET_ADMIN NET_RAW NET_BIND_SERVICE
+SecurityLabelDisable=true
+Volume=/var/lib/shelly-monitor:/data:z
+EnvironmentFile=/etc/shelly-monitor/env
+Environment=SM_DATA_DIR=/data
+Exec=/usr/local/bin/run-dhcp
+
+[Service]
+# The access point may take a few seconds to come up after boot: keep trying.
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

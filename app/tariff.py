@@ -1,0 +1,195 @@
+"""Electricity price: one base price per kWh plus optional time slots.
+
+A slot has a name, a price, the weekdays it applies to and a daily time window
+on a 15-minute grid (the same grid the 15-minute rollup uses, so the cost of a
+bucket is exact). If slots overlap, the one higher in the list wins. Times not
+covered by any slot use the base price. A window whose end is not after its
+start runs over midnight, and start == end means the whole day: a slot "night"
+from 23:00 to 07:00 on Monday covers Monday 23:00-24:00 and Tuesday 00:00-07:00.
+
+The tariff lives in the database (table meta, key "tariff"), so it changes
+from the Settings page without restarting anything. Costs are computed when
+they're asked for, with the tariff as it is now: changing the price changes
+the cost shown for past readings too.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from .db import Database
+
+GRID = 15  # minutes
+META_KEY = "tariff"
+TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})$")
+MAX_SLOTS = 12
+MAX_PRICE = 1000.0  # per kWh, in whatever currency; just a typo guard
+
+
+class TariffError(ValueError):
+    """The submitted tariff isn't usable; the message is meant for the person."""
+
+
+def parse_hhmm(text: Any) -> int:
+    """'07:30' -> minutes since midnight. '24:00' is accepted and means 00:00."""
+    m = TIME_RE.match(str(text).strip())
+    if not m:
+        raise TariffError(f"'{text}' isn't a time. Use HH:MM, for example 07:30.")
+    h, mi = int(m.group(1)), int(m.group(2))
+    if (h, mi) == (24, 0):
+        return 0
+    if h > 23 or mi > 59:
+        raise TariffError(f"'{text}' isn't a time of day.")
+    if mi % GRID:
+        raise TariffError(f"Times must be on a {GRID}-minute step (00, 15, 30, 45). '{text}' isn't.")
+    return h * 60 + mi
+
+
+def fmt_hhmm(minutes: int) -> str:
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+@dataclass
+class Slot:
+    name: str
+    price: float
+    days: tuple[int, ...]  # 0 = Monday ... 6 = Sunday
+    start: int  # minutes since midnight
+    end: int
+
+    def covers(self, weekday: int, minute: int) -> bool:
+        if self.start == self.end:  # whole day
+            return weekday in self.days
+        if self.start < self.end:
+            return weekday in self.days and self.start <= minute < self.end
+        # runs over midnight: the evening belongs to the listed day, the morning to the day after
+        return (weekday in self.days and minute >= self.start) or (
+            (weekday - 1) % 7 in self.days and minute < self.end
+        )
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "price": self.price, "days": list(self.days),
+                "start": fmt_hhmm(self.start), "end": fmt_hhmm(self.end)}
+
+
+@dataclass
+class Tariff:
+    enabled: bool = False
+    currency: str = "€"
+    currency_after: bool = True  # "0.31 €" rather than "€ 0.31"
+    decimals: int = 2  # decimals when showing an amount of money
+    timezone: str = "UTC"
+    base_price: float = 0.0  # per kWh
+    slots: list[Slot] = field(default_factory=list)
+
+    # ---- pricing -------------------------------------------------------------
+
+    @property
+    def tz(self) -> ZoneInfo:
+        return ZoneInfo(self.timezone)
+
+    def slot_index(self, weekday: int, minute: int) -> int:
+        """Index of the slot that applies, or -1 for the base price."""
+        for i, s in enumerate(self.slots):
+            if s.covers(weekday, minute):
+                return i
+        return -1
+
+    def price_for(self, index: int) -> float:
+        return self.base_price if index < 0 else self.slots[index].price
+
+    def local(self, ts: float) -> datetime:
+        return datetime.fromtimestamp(ts, self.tz)
+
+    def index_at(self, ts: float) -> int:
+        t = self.local(ts)
+        return self.slot_index(t.weekday(), t.hour * 60 + t.minute)
+
+    def price_at(self, ts: float) -> float:
+        """Price per kWh at an instant. Handles daylight-saving changes (local time is used)."""
+        return self.price_for(self.index_at(ts))
+
+    def week(self) -> list[list[int]]:
+        """Slot index for every quarter hour of a week: 7 rows (Monday first) of 96."""
+        return [[self.slot_index(d, q * GRID) for q in range(24 * 60 // GRID)] for d in range(7)]
+
+    # ---- (de)serialising ---------------------------------------------------------
+
+    def to_dict(self) -> dict:
+        return {
+            "enabled": self.enabled, "currency": self.currency, "currency_after": self.currency_after,
+            "decimals": self.decimals, "timezone": self.timezone, "base_price": self.base_price,
+            "slots": [s.to_dict() for s in self.slots],
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Tariff":
+        """Validate and build. Raises TariffError with a message fit to show."""
+        try:
+            tz = str(d.get("timezone") or "UTC").strip()
+            ZoneInfo(tz)
+        except (ZoneInfoNotFoundError, ValueError, OSError):
+            raise TariffError(
+                f"'{d.get('timezone')}' isn't a time zone name. Use a name like Europe/Rome."
+            ) from None
+        currency = str(d.get("currency", "€")).strip()
+        if not 1 <= len(currency) <= 8:
+            raise TariffError("The currency needs 1 to 8 characters, for example € or CHF.")
+        if any(ord(c) < 32 for c in currency):
+            raise TariffError("The currency can't contain control characters.")
+        try:
+            decimals = int(d.get("decimals", 2))
+            base = float(d.get("base_price", 0))
+        except (TypeError, ValueError):
+            raise TariffError("Prices and decimals must be numbers.") from None
+        if not 0 <= decimals <= 4:
+            raise TariffError("Show between 0 and 4 decimals.")
+        _check_price(base, "The base price")
+
+        raw_slots = d.get("slots") or []
+        if len(raw_slots) > MAX_SLOTS:
+            raise TariffError(f"Up to {MAX_SLOTS} time slots are supported.")
+        slots: list[Slot] = []
+        for n, s in enumerate(raw_slots, 1):
+            name = str(s.get("name") or "").strip() or f"Slot {n}"
+            if len(name) > 24:
+                raise TariffError(f"Slot name '{name[:24]}…' is too long (24 characters at most).")
+            try:
+                price = float(s.get("price"))
+            except (TypeError, ValueError):
+                raise TariffError(f"Slot '{name}' needs a price.") from None
+            _check_price(price, f"The price of '{name}'")
+            days = tuple(sorted({int(x) for x in (s.get("days") or [])}))
+            if not days or any(x < 0 or x > 6 for x in days):
+                raise TariffError(f"Pick at least one day for slot '{name}'.")
+            slots.append(Slot(name, price, days, parse_hhmm(s.get("start", "00:00")),
+                              parse_hhmm(s.get("end", "00:00"))))
+        return cls(
+            enabled=bool(d.get("enabled", False)), currency=currency,
+            currency_after=bool(d.get("currency_after", True)), decimals=decimals,
+            timezone=tz, base_price=base, slots=slots,
+        )
+
+
+def _check_price(v: float, what: str) -> None:
+    if v != v or v < 0 or v > MAX_PRICE:  # NaN, negative, absurd
+        raise TariffError(f"{what} must be a price per kWh between 0 and {MAX_PRICE:g}.")
+
+
+def load(db: Database) -> Tariff:
+    raw = db.get_meta(META_KEY)
+    if raw:
+        try:
+            return Tariff.from_dict(json.loads(raw))
+        except (ValueError, TypeError):
+            pass  # a damaged value falls back to "no tariff" rather than stopping the dashboard
+    return Tariff()
+
+
+def save(db: Database, t: Tariff) -> None:
+    db.set_meta(META_KEY, json.dumps(t.to_dict()))

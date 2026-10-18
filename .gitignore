@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Demo and runtime data (databases, certificates, backups)
+demo-data/
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+
+# Things you build or download for the Pi
+*.tar
+*.tar.gz
+
+*.img
+*.img.xz
+*.iso
+*.raw
+*.qcow2
+
+# Secrets: never commit these
+*.pem
+*.key
+*.crt
+*.p12
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node, if you run the browser checks locally
+node_modules/

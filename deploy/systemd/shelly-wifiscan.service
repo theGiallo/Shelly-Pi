@@ -1,0 +1,7 @@
+[Unit]
+Description=Scan for Wi-Fi networks for the Shelly Monitor "Add plug" page
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/shelly-monitor/wifiscan.sh
+TimeoutStartSec=60

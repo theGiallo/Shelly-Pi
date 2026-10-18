@@ -1,0 +1,15 @@
+[Unit]
+Description=Shelly Monitor first-boot setup
+Documentation=file:///var/lib/shelly-install/project/README.md
+After=network-online.target NetworkManager.service
+Wants=network-online.target
+ConditionPathExists=/var/lib/shelly-install/firstboot.env
+ConditionPathExists=!/var/lib/shelly-install/done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash /var/lib/shelly-install/project/deploy/firstboot/firstboot.sh
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

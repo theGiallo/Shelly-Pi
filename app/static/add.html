@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Add a plug &ndash; Shelly Monitor</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">Shelly Monitor</a>
+    <nav class="nav" aria-label="Main">
+      <a href="/" data-page="dashboard">Dashboard</a>
+      <a href="/add" data-page="add">Add plug</a>
+      <a href="/settings" data-page="settings">Settings</a>
+    </nav>
+    <span id="clock-chip"></span>
+  </header>
+
+  <main>
+    <h1 class="page-title">Add a plug</h1>
+    <p class="lede">The plug joins the Wi-Fi network this Pi hosts. Nothing here needs internet.</p>
+
+    <ol class="steps">
+      <li class="step is-active" id="step-join">
+        <div class="step-n" aria-hidden="true">1</div>
+        <div class="body">
+          <h2>Connect your phone to the plug</h2>
+          <p>Plug the new plug into a socket and give it about 30 seconds. It starts its own Wi-Fi network, named like <strong>ShellyPlugMG3-XXXXXX</strong>. The Pi looks for it, so you can join it by scanning a code instead of typing.</p>
+          <div class="status-line" id="join-status" role="status"><span class="spinner" aria-hidden="true"></span><span id="join-text">Looking for the plug's Wi-Fi&hellip;</span></div>
+          <div class="join-pick" id="join-pick" hidden>
+            <label for="join-select" id="join-pick-label">Choose another</label>
+            <select id="join-select"></select>
+          </div>
+          <div class="qr-row" id="join-qr-row" hidden>
+            <div class="qr"><img id="qr-join" alt="QR code that joins the plug's Wi-Fi network" width="204" height="204"></div>
+            <div class="qr-side">
+              <p>Scan this code with your phone's camera and join <strong id="join-ssid">the plug's network</strong>. If the phone says there is no internet, stay connected.</p>
+              <p class="note" id="join-signal"></p>
+            </div>
+          </div>
+          <p class="note" id="join-help" hidden></p>
+          <details class="fallback">
+            <summary>Join it by hand instead</summary>
+            <p class="note" style="margin-top:8px">Open your phone's Wi-Fi settings and choose the network that starts with <strong>Shelly</strong>. It has no password. If nothing shows up, hold the plug's button for about 10 seconds to reset it (see its manual), then wait for it to restart.</p>
+          </details>
+        </div>
+      </li>
+
+      <li class="step is-active" id="step-1">
+        <div class="step-n" aria-hidden="true">2</div>
+        <div class="body">
+          <h2>Send the Pi's Wi-Fi details to the plug</h2>
+          <p>With your phone on the plug's network, scan the next code. It tells the plug to join the Wi-Fi this Pi hosts. If the phone says it has no internet, stay connected.</p>
+          <div class="qr-row">
+            <div class="qr"><img id="qr-provision" alt="QR code that sends the Wi-Fi details to the plug" width="204" height="204"></div>
+            <div class="qr-side">
+              <p>Scan this code with your phone's camera and open the link. It tells the plug to join <strong id="ssid-name">the Pi's network</strong>.</p>
+              <p class="note">The code contains the Wi-Fi password. Keep it out of screenshots.</p>
+              <p><a id="provision-link" href="#">Using your phone for this page? Open the link directly.</a></p>
+            </div>
+          </div>
+          <details class="fallback">
+            <summary>Enter the details by hand instead</summary>
+            <p class="note" style="margin-top:8px">On your phone, open <a id="plug-page-link" href="#" rel="noreferrer">the plug's setup page</a>, go to Wi-Fi settings and fill in:</p>
+            <div class="copy-row"><input id="fb-ssid" type="text" readonly aria-label="Wi-Fi name"><button type="button" class="btn small" data-copy="fb-ssid">Copy name</button></div>
+            <div class="copy-row"><input id="fb-pass" type="password" readonly aria-label="Wi-Fi password"><button type="button" class="btn small" id="fb-pass-show">Show</button><button type="button" class="btn small" data-copy="fb-pass">Copy password</button></div>
+          </details>
+        </div>
+      </li>
+
+      <li class="step is-active" id="step-2">
+        <div class="step-n" aria-hidden="true">3</div>
+        <div class="body">
+          <h2>Wait for the plug to appear</h2>
+          <div class="status-line" id="scan-status" role="status"><span class="spinner" aria-hidden="true"></span><span id="scan-text">Looking for new plugs on the Pi's Wi-Fi&hellip;</span></div>
+          <div class="cands" id="cands"></div>
+          <div id="trouble" hidden>
+            <p><strong>Nothing yet?</strong> Check that the plug is still plugged in and that your phone showed the plug's reply. If the plug accepted the details but didn't join, it may need a restart: while your phone is still on the plug's network, scan this code.</p>
+            <div class="qr" style="width:160px;height:160px;margin-top:10px"><img id="qr-reboot" alt="QR code that restarts the plug" width="144" height="144"></div>
+          </div>
+          <details class="fallback">
+            <summary>I know the plug's address</summary>
+            <div class="copy-row"><input id="manual-host" type="text" inputmode="url" placeholder="192.168.50.101" aria-label="Plug address" autocomplete="off"><button type="button" class="btn small" id="manual-find">Find plug</button></div>
+            <p class="note" id="manual-msg" style="margin-top:6px"></p>
+          </details>
+        </div>
+      </li>
+
+      <li class="step is-future" id="step-3">
+        <div class="step-n" aria-hidden="true">4</div>
+        <div class="body">
+          <h2>Name it</h2>
+          <div id="step-3-body" hidden>
+            <p class="muted" id="chosen"></p>
+            <form id="name-form" novalidate>
+              <div class="field">
+                <label for="f-name">Name</label>
+                <input id="f-name" type="text" maxlength="40" placeholder="Desk lamp" autocomplete="off" required>
+                <span class="hint" id="f-name-err" role="alert" style="color:var(--danger)" hidden>Give the plug a name.</span>
+              </div>
+              <div class="field">
+                <label for="f-room">Room <span class="muted" style="font-weight:400">(optional)</span></label>
+                <input id="f-room" type="text" maxlength="40" placeholder="Office" autocomplete="off">
+              </div>
+              <div class="field">
+                <span class="label" id="state-label">After a power cut or restart, the plug should be</span>
+                <div class="radios" role="radiogroup" aria-labelledby="state-label">
+                  <label><input type="radio" name="initial" value="off" checked><span>Off<span class="hint">Safest. Nothing switches on by itself.</span></span></label>
+                  <label><input type="radio" name="initial" value="on"><span>On<span class="hint">For things that should always run, like a router.</span></span></label>
+                  <label><input type="radio" name="initial" value="restore_last"><span>Back to how it was<span class="hint">Remembers the last state.</span></span></label>
+                </div>
+                <span class="hint">Adding a plug can restart it once, so this takes effect right away.</span>
+              </div>
+              <div class="field check">
+                <input id="f-ap" type="checkbox" checked>
+                <label for="f-ap">Turn off the plug's own setup Wi-Fi
+                  <span class="hint"><br>Recommended. If the plug ever loses the Pi's network, you would need to factory-reset it to set it up again.</span></label>
+              </div>
+              <div class="actions"><button type="submit" class="btn primary" id="f-submit">Add plug</button>
+                <button type="button" class="btn" id="f-back">Choose a different plug</button></div>
+            </form>
+          </div>
+        </div>
+      </li>
+
+      <li class="step is-future" id="step-4">
+        <div class="step-n" aria-hidden="true">5</div>
+        <div class="body">
+          <h2>Set up</h2>
+          <div id="step-4-body" hidden>
+            <ul class="progress" id="progress" aria-live="polite"></ul>
+            <div id="result" hidden></div>
+          </div>
+        </div>
+      </li>
+    </ol>
+  </main>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/add.js"></script>
+</body>
+</html>

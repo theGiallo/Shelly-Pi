@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Settings &ndash; Shelly Monitor</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">Shelly Monitor</a>
+    <nav class="nav" aria-label="Main">
+      <a href="/" data-page="dashboard">Dashboard</a>
+      <a href="/add" data-page="add">Add plug</a>
+      <a href="/settings" data-page="settings">Settings</a>
+    </nav>
+    <span id="clock-chip"></span>
+  </header>
+
+  <main>
+    <h1 class="page-title">Settings</h1>
+    <p class="lede">The Pi's clock, the Wi-Fi it hosts, and what is stored.</p>
+
+    <section class="section" id="clock" aria-labelledby="h-clock">
+      <h2 id="h-clock">Clock</h2>
+      <p>Every reading is stamped with the Pi's time. The Pi keeps time with a small battery-backed clock, because it has no internet to ask. Set it once, and again after replacing that battery.</p>
+      <div class="banner" id="clock-warn" hidden>
+        <strong>The clock can't be trusted right now.</strong>
+        <span id="clock-warn-text"></span>
+        Readings are held in memory (<span id="held">0</span> so far) and saved with the right times once you set the clock.
+      </div>
+      <dl class="kv">
+        <dt>Pi time</dt><dd class="big-time" id="pi-time">&ndash;</dd>
+        <dt>This device</dt><dd class="big-time" id="my-time">&ndash;</dd>
+        <dt>Difference</dt><dd id="diff">&ndash;</dd>
+      </dl>
+      <div class="actions"><button type="button" class="btn primary" id="set-time">Set the Pi's clock from this device</button></div>
+      <p class="note" style="margin-top:10px">This device's time is used as is, so check it is right first.</p>
+    </section>
+
+    <section class="section" id="cost" aria-labelledby="h-cost">
+      <h2 id="h-cost">Electricity cost</h2>
+      <p>Give energy a price and the dashboard shows what each plug costs, next to its power and energy. Prices can differ by time of day, for example a cheaper night rate.</p>
+      <div class="field check">
+        <input id="t-enabled" type="checkbox">
+        <label for="t-enabled">Show costs on the dashboard</label>
+      </div>
+      <div id="t-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="t-currency">Currency</label>
+            <input id="t-currency" type="text" maxlength="8" list="t-currencies" autocomplete="off" size="6">
+            <datalist id="t-currencies"><option value="€"><option value="$"><option value="£"><option value="CHF"><option value="kr"><option value="zł"><option value="Kč"><option value="¥"><option value="₹"><option value="R$"></datalist>
+          </div>
+          <div class="field">
+            <label for="t-position">Shown</label>
+            <select id="t-position"><option value="after">after the amount (0.31 €)</option><option value="before">before the amount (€ 0.31)</option></select>
+          </div>
+          <div class="field">
+            <label for="t-decimals">Decimals</label>
+            <select id="t-decimals"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="t-base">Price per kWh</label>
+            <input id="t-base" type="number" min="0" step="any" inputmode="decimal">
+            <span class="hint">Used whenever no time slot below applies.</span>
+          </div>
+          <div class="field">
+            <label for="t-tz">Time zone</label>
+            <input id="t-tz" type="text" maxlength="64" list="t-zones" autocomplete="off" placeholder="Europe/Rome">
+            <datalist id="t-zones"></datalist>
+            <span class="hint">Slots follow the clock in this zone, daylight saving included. <button type="button" class="btn ghost small" id="t-tz-here">Use this device's</button></span>
+          </div>
+        </div>
+
+        <h3 class="sub-h">Time slots</h3>
+        <p class="note">Optional. Each slot has its own price for the days and hours you choose. If slots overlap, the one higher in the list wins. Times use 15-minute steps. A slot that ends before it starts runs past midnight into the next morning, so 23:00 to 07:00 ticked for Mon to Fri covers the mornings of Tue to Sat. Start and end equal means the whole day.</p>
+        <div id="t-slots" class="slots"></div>
+        <div class="actions"><button type="button" class="btn small" id="t-add">Add a time slot</button></div>
+
+        <h3 class="sub-h">Week at a glance</h3>
+        <div id="t-week" class="week" role="img" aria-label="Which price applies at each hour of the week"></div>
+        <ul id="t-legend" class="legend"></ul>
+      </div>
+      <div class="actions"><button type="button" class="btn primary" id="t-save">Save prices</button></div>
+      <p class="note" style="margin-top:10px">Costs are worked out from the readings and today's prices, so changing a price changes the cost shown for past days as well.</p>
+    </section>
+
+    <section class="section" aria-labelledby="h-wifi">
+      <h2 id="h-wifi">Wi-Fi for the plugs</h2>
+      <dl class="kv">
+        <dt>Network name</dt><dd id="ap-ssid">&ndash;</dd>
+        <dt>Password</dt><dd><span id="ap-pass">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span> <button type="button" class="btn ghost small" id="ap-show">Show</button></dd>
+        <dt>Dashboard address</dt><dd><span id="ap-ip">&ndash;</span> from a device on this Wi-Fi</dd>
+      </dl>
+      <p class="note">To add a plug, use <a href="/add">Add plug</a>.</p>
+    </section>
+
+    <section class="section" aria-labelledby="h-data">
+      <h2 id="h-data">Stored data</h2>
+      <dl class="kv" id="data-kv"></dl>
+      <p class="note" id="retention"></p>
+    </section>
+
+    <section class="section" id="https" aria-labelledby="h-https" hidden>
+      <h2 id="h-https">Secure connection (HTTPS)</h2>
+      <p>With HTTPS the dashboard password and everything you do here travel encrypted. The Pi makes its own certificate, so it needs no internet, no domain name and no renewing by hand. In return each device you use has to trust the Pi's certificate authority once.</p>
+      <div class="banner" id="https-warn" hidden></div>
+      <dl class="kv">
+        <dt>Status</dt><dd id="https-status">&ndash;</dd>
+        <dt>Address</dt><dd id="https-addr">&ndash;</dd>
+        <dt>Certificate</dt><dd id="https-cert">&ndash;</dd>
+        <dt>Covers</dt><dd id="https-names">&ndash;</dd>
+      </dl>
+      <p class="note">The certificate is valid for about 13 months. The Pi checks it every few minutes and makes a new one by itself when it is close to expiring or when its network address changes. It only needs the Pi's clock to be right.</p>
+
+      <h3 class="sub-h">1. Trust this Pi on each device</h3>
+      <div class="actions"><a class="btn primary" id="ca-download" href="/api/https/ca.crt" download>Download the certificate authority</a></div>
+      <p class="note">Fingerprint to compare when the device asks: <code class="fp" id="ca-fp">&ndash;</code></p>
+      <details class="how"><summary>Windows</summary><p>Open the downloaded file, choose <em>Install Certificate</em>, then <em>Current User</em>. Pick <em>Place all certificates in the following store</em>, choose <em>Trusted Root Certification Authorities</em>, and finish. Restart the browser. Chrome and Edge then trust it.</p></details>
+      <details class="how"><summary>macOS</summary><p>Open the file. Keychain Access adds it. Double-click it there, open <em>Trust</em>, and set <em>When using this certificate</em> to <em>Always Trust</em>. Close and enter your password.</p></details>
+      <details class="how"><summary>iPhone and iPad</summary><p>Open this page in Safari on the device, tap Download, and allow it. Then open <em>Settings</em>, tap <em>Profile Downloaded</em> and install it. After that go to <em>Settings, General, About, Certificate Trust Settings</em> and switch on full trust for it.</p></details>
+      <details class="how"><summary>Android</summary><p>Download the file, then open <em>Settings, Security</em> (on some phones <em>Security and privacy, More security settings</em>), <em>Install a certificate</em>, <em>CA certificate</em>, and choose the file. Android warns that the network may be monitored: that is its standard message for any added authority.</p></details>
+      <details class="how"><summary>Linux and Firefox</summary><p>Firefox keeps its own list: <em>Settings, Privacy and Security, View Certificates, Authorities, Import</em>, and tick <em>Trust this CA to identify websites</em>. For the rest of the system on Fedora copy the file to <code>/etc/pki/ca-trust/source/anchors/</code> and run <code>sudo update-ca-trust</code>; on Debian or Ubuntu copy it to <code>/usr/local/share/ca-certificates/</code> and run <code>sudo update-ca-certificates</code>.</p></details>
+
+      <h3 class="sub-h">2. Switch to HTTPS</h3>
+      <div class="field check">
+        <input id="https-enabled" type="checkbox">
+        <label for="https-enabled">Allow HTTPS</label>
+      </div>
+      <div class="field check">
+        <input id="https-only" type="checkbox">
+        <label for="https-only">Send plain HTTP visitors to HTTPS
+          <span class="hint"><br>Switch this on once every device you use trusts the certificate. Until then they would see a warning. The health check and the certificate download always stay on plain HTTP.</span></label>
+      </div>
+      <p class="note" id="https-open"></p>
+
+      <details class="how"><summary>Start over with a new certificate authority</summary>
+        <p>Needed only if the Pi's host name changed, or the Pi's storage was copied somewhere it shouldn't have been. Every device then has to install the new authority and the old one can be removed from them.</p>
+        <div class="actions"><button type="button" class="btn danger small" id="ca-reset">Create a new authority</button></div>
+      </details>
+    </section>
+
+    <section class="section" id="backup" aria-labelledby="h-backup">
+      <h2 id="h-backup">Backup and restore</h2>
+      <p>One file holds everything: your plugs, all their readings, the electricity prices, the address each plug keeps and the settings. Keep a copy somewhere other than the SD card, for example before updating the Pi or after changing plugs.</p>
+      <div class="actions">
+        <a class="btn primary" id="bk-download" href="/api/backup" download>Download a backup</a>
+      </div>
+      <p class="note" id="bk-name">The file is named with the date and time, like shelly-monitor_2026-10-17_03-53-00.zip.</p>
+      <p class="note">It doesn't contain the dashboard or Wi-Fi password.</p>
+
+      <h3 class="sub-h">Restore from a backup</h3>
+      <div class="field">
+        <label for="bk-file">Backup file</label>
+        <input id="bk-file" type="file" accept=".zip,application/zip">
+      </div>
+      <div id="bk-confirm" hidden>
+        <div class="banner">
+          <strong>This replaces everything stored on this Pi</strong> with what is in <span id="bk-chosen"></span>: plugs, readings, prices, plug addresses and the polling and storage settings.
+          The current data is first copied aside on the Pi, so a mistake can still be undone by hand. This Pi's Wi-Fi name and password, the dashboard password and the network address are kept.
+        </div>
+        <div class="actions"><button type="button" class="btn danger" id="bk-restore">Replace everything with this backup</button></div>
+      </div>
+      <p class="note" id="bk-result" role="status"></p>
+    </section>
+
+    <section class="section" id="usb" aria-labelledby="h-usb">
+      <h2 id="h-usb">Automatic backups to a USB drive</h2>
+      <p>Plug a USB stick or drive into the Pi and it saves a backup there on a schedule, so a copy always exists apart from the SD card. Nothing on the drive is changed or formatted: backups go into a folder called <code>shelly-monitor-backups</code>, and the Pi only ever deletes its own older backups from that folder. The drive is used just while a backup is copied, so you can unplug it at any other time.</p>
+      <div class="field check">
+        <input id="ab-enabled" type="checkbox">
+        <label for="ab-enabled">Back up automatically</label>
+      </div>
+      <div id="ab-body">
+        <div class="field">
+          <label for="ab-drive">Drive</label>
+          <div class="inline">
+            <select id="ab-drive"><option value="">Looking for drives…</option></select>
+            <button type="button" class="btn small" id="ab-refresh">Look again</button>
+          </div>
+          <span class="hint" id="ab-drive-hint">Only drives plugged in right now are listed. Needs exFAT, FAT32, NTFS or ext4.</span>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="ab-every">How often</label>
+            <select id="ab-every"></select>
+          </div>
+          <div class="field">
+            <label for="ab-hour" id="ab-hour-label">Time of day</label>
+            <select id="ab-hour"></select>
+          </div>
+          <div class="field">
+            <label for="ab-keep">Backups to keep</label>
+            <input id="ab-keep" type="number" min="1" max="3650" step="1" inputmode="numeric">
+          </div>
+        </div>
+        <div class="field">
+          <label for="ab-tz">Time zone</label>
+          <input id="ab-tz" type="text" maxlength="64" list="t-zones" autocomplete="off" placeholder="Europe/Rome">
+          <span class="hint">The time of day and the date in each file name follow this zone. <button type="button" class="btn ghost small" id="ab-tz-here">Use this device's</button></span>
+        </div>
+      </div>
+      <dl class="kv">
+        <dt>Next backup</dt><dd id="ab-next">&ndash;</dd>
+        <dt>Last backup</dt><dd id="ab-last">&ndash;</dd>
+      </dl>
+      <div class="actions">
+        <button type="button" class="btn primary" id="ab-save">Save</button>
+        <button type="button" class="btn" id="ab-run">Back up now</button>
+      </div>
+      <p class="note" id="ab-msg" role="status"></p>
+      <p class="note">If the Pi was off at the scheduled time it makes the backup as soon as it is on again with the drive plugged in. If a backup fails, the reason is shown above and the Pi tries again every ten minutes.</p>
+    </section>
+
+    <section class="section" aria-labelledby="h-about">
+      <h2 id="h-about">About</h2>
+      <dl class="kv"><dt>Version</dt><dd id="version">&ndash;</dd></dl>
+    </section>
+  </main>
+
+  <script src="/static/common.js"></script>
+  <script src="/static/settings.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+[Unit]
+Description=List USB drives or copy a backup to one, for the Shelly Monitor web page
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/shelly-monitor/usb.sh
+TimeoutStartSec=15min

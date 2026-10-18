@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Shelly Monitor</title>
+  <link rel="stylesheet" href="/static/vendor/uPlot.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">Shelly Monitor</a>
+    <nav class="nav" aria-label="Main">
+      <a href="/" data-page="dashboard">Dashboard</a>
+      <a href="/add" data-page="add">Add plug</a>
+      <a href="/settings" data-page="settings">Settings</a>
+    </nav>
+    <span id="clock-chip"></span>
+  </header>
+
+  <main>
+    <div id="conn-banner" class="banner" hidden>Can't reach the Pi. Trying again&hellip;</div>
+
+    <section class="total" aria-labelledby="total-label">
+      <div class="total-top">
+        <div class="readout">
+          <h1 class="visually-hidden" id="total-label">Power right now</h1>
+          <div><span class="big" id="total-w">0</span><span class="unit">W</span></div>
+          <p class="sub" id="total-sub">Loading&hellip;</p>
+        </div>
+        <div class="controls">
+          <div class="ranges" id="modes" role="group" aria-label="Chart shows"></div>
+          <div class="ranges" id="views" role="group" aria-label="Chart style"></div>
+          <div class="ranges" id="ranges" role="group" aria-label="Chart range"></div>
+        </div>
+      </div>
+      <div class="sums" id="sums" hidden></div>
+      <div class="share" id="share" role="img" aria-label="How the total is split between plugs"></div>
+    </section>
+
+    <section class="stack" id="stack" aria-labelledby="stack-title" hidden>
+      <div class="stack-head">
+        <h2 id="stack-title">All plugs together</h2>
+        <div class="ranges" id="stack-style" role="group" aria-label="How the plugs are drawn together"></div>
+        <ul class="stack-legend" id="stack-legend"></ul>
+      </div>
+      <div class="chart" id="stack-chart" role="img"></div>
+    </section>
+
+    <section class="plugs" id="plugs" aria-label="Plugs"></section>
+
+    <section class="empty" id="empty" hidden>
+      <h2>No plugs yet</h2>
+      <p>Add a Shelly plug and it will show up here with its power, history and an on/off switch.</p>
+      <a class="btn primary" href="/add">Add your first plug</a>
+    </section>
+  </main>
+
+  <dialog id="edit-dialog" aria-labelledby="edit-title">
+    <h2 id="edit-title">Edit plug</h2>
+    <div class="field">
+      <label for="edit-name">Name</label>
+      <input id="edit-name" type="text" maxlength="40" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="edit-room">Room</label>
+      <input id="edit-room" type="text" maxlength="40" autocomplete="off">
+    </div>
+    <div class="field check">
+      <input id="edit-enabled" type="checkbox">
+      <label for="edit-enabled">Monitor this plug
+        <span class="hint"><br>Turn this off to stop reading it. Its history is kept.</span></label>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn danger" id="edit-remove-open">Remove plug&hellip;</button>
+      <div class="right">
+        <button type="button" class="btn" id="edit-cancel">Cancel</button>
+        <button type="button" class="btn primary" id="edit-save">Save changes</button>
+      </div>
+    </div>
+    <div id="remove-box" hidden style="margin-top:20px; padding-top:16px; border-top:1px solid var(--line)">
+      <p>Remove <strong id="remove-name"></strong> from the dashboard? The plug keeps its settings and Wi-Fi details; you can add it again later.</p>
+      <div class="field check" style="margin-top:12px">
+        <input id="remove-purge" type="checkbox">
+        <label for="remove-purge">Also delete its history</label>
+      </div>
+      <button type="button" class="btn danger" id="remove-confirm">Remove plug</button>
+    </div>
+  </dialog>
+
+  <script src="/static/vendor/uPlot.iife.min.js"></script>
+  <script src="/static/common.js"></script>
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for a set-the-clock request from the Shelly Monitor web page
+
+[Path]
+PathExists=/var/lib/shelly-monitor/bridge/settime.req
+Unit=shelly-settime.service
+
+[Install]
+WantedBy=multi-user.target

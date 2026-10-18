@@ -1,0 +1,2 @@
+# When the DS3231 clock shows up, copy its time into the system clock.
+ACTION=="add", SUBSYSTEM=="rtc", KERNEL=="rtc0", TAG+="systemd", ENV{SYSTEMD_WANTS}+="rtc-load.service"
