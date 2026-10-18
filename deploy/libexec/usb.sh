@@ -14,6 +14,7 @@
 # in the folder "shelly-monitor-backups" and only files named
 # shelly-monitor_*.zip in that folder are ever deleted.
 set -u
+export LC_ALL=C   # awk handles bytes, not characters, so names pass through untouched
 
 BRIDGE=${SHELLY_BRIDGE:-/var/lib/shelly-monitor/bridge}
 REQ=$BRIDGE/usb.req
@@ -50,17 +51,26 @@ fail() { answer "\"ok\":false,\"message\":$(json_str "$1")"; echo "usb: $1" >&2;
 list_json() {
   ${SHELLY_LSBLK:-lsblk} -P -b -o KNAME,TYPE,SIZE,FSTYPE,LABEL,UUID,MODEL,VENDOR,TRAN,HOTPLUG,PKNAME,MOUNTPOINT 2>/dev/null |
   awk -v supported="$SUPPORTED" '
+    function hex(h,   d) {                         # ("0x" h) + 0 only works in mawk, not gawk (Fedora)
+      d = "0123456789abcdef"
+      return (index(d, tolower(substr(h, 1, 1))) - 1) * 16 + (index(d, tolower(substr(h, 2, 1))) - 1)
+    }
     function unesc(s,   out, i, c, h) {            # lsblk writes odd bytes as \xNN
       out = ""
       while ((i = index(s, "\\x")) > 0) {
         h = substr(s, i + 2, 2)
-        c = sprintf("%c", ("0x" h) + 0)
+        c = sprintf("%c", hex(h))
         out = out substr(s, 1, i - 1) c
         s = substr(s, i + 4)
       }
       return out s
     }
-    function js(s) { s = unesc(s); gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/[\001-\037]/, " ", s); return "\"" s "\"" }
+    function repl(s, from, to,   out, i) {           # plain text replace: gsub treats backslashes differently in gawk and mawk
+      out = ""
+      while ((i = index(s, from)) > 0) { out = out substr(s, 1, i - 1) to; s = substr(s, i + length(from)) }
+      return out s
+    }
+    function js(s) { s = unesc(s); gsub(/[\001-\037]/, " ", s); s = repl(s, "\\", "\\\\"); s = repl(s, "\"", "\\\""); return "\"" s "\"" }
     function field(line, key,   re, v) {
       re = key "=\"[^\"]*\""
       if (match(line, re)) { v = substr(line, RSTART + length(key) + 2, RLENGTH - length(key) - 3); return v }

@@ -10,6 +10,7 @@
 # hosting works on most Pi Wi-Fi chips but can fail on some; a second USB Wi-Fi adapter
 # named in SM_SCAN_IFACE avoids the question.
 set -u
+export LC_ALL=C   # awk handles bytes, not characters, so names pass through untouched
 
 BRIDGE=${SHELLY_BRIDGE:-/var/lib/shelly-monitor/bridge}
 ENVFILE=${SHELLY_ENVFILE:-/etc/shelly-monitor/env}
@@ -83,12 +84,18 @@ parse_nmcli() {
 if [ "$FORMAT" = nmcli ]; then TSV=$(printf '%s\n' "$RAW" | parse_nmcli); else TSV=$(printf '%s\n' "$RAW" | parse_iw); fi
 
 NETS=$(printf '%s\n' "$TSV" | awk -F'\t' '
+  BEGIN { D = "0123456789abcdef" }
   function unesc(s,   out, i, h) {                 # iw writes odd bytes as \xNN
     out = ""
-    while ((i = index(s, "\\x")) > 0) { h = substr(s, i + 2, 2); out = out substr(s, 1, i - 1) sprintf("%c", ("0x" h) + 0); s = substr(s, i + 4) }
+    while ((i = index(s, "\\x")) > 0) { h = substr(s, i + 2, 2); out = out substr(s, 1, i - 1) sprintf("%c", (index(D, tolower(substr(h, 1, 1))) - 1) * 16 + (index(D, tolower(substr(h, 2, 1))) - 1)); s = substr(s, i + 4) }
     return out s
   }
-  function js(s) { s = unesc(s); gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/[\001-\037]/, " ", s); return "\"" s "\"" }
+  function repl(s, from, to,   out, i) {           # plain text replace: gsub treats backslashes differently in gawk and mawk
+      out = ""
+      while ((i = index(s, from)) > 0) { out = out substr(s, 1, i - 1) to; s = substr(s, i + length(from)) }
+      return out s
+    }
+    function js(s) { s = unesc(s); gsub(/[\001-\037]/, " ", s); s = repl(s, "\\", "\\\\"); s = repl(s, "\"", "\\\""); return "\"" s "\"" }
   NF >= 5 && $1 != "" && count < 200 {
     printf "%s{\"ssid\":%s,\"bssid\":%s,\"signal\":%d,\"channel\":%d,\"secured\":%s}",
       (count ? "," : ""), js($1), js($2), $3, $4, ($5 == 1 ? "true" : "false")
