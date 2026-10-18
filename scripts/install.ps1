@@ -265,18 +265,31 @@ Note "Copied to ~/Shelly-Pi on the Pi."
 
 function Get-File([string]$url, [string]$dest) {
   $part = "$dest.part"
-  if (Test-Path $part) { Remove-Item -Force $part }
+  [long]$have = 0
+  if (Test-Path $part) { $have = (Get-Item $part).Length }
   $req = [System.Net.HttpWebRequest]::Create($url)
   $req.UserAgent = "Shelly-Pi-installer"
   $req.AllowAutoRedirect = $true
   $req.ReadWriteTimeout = 60000
-  $resp = $req.GetResponse()
-  $total = $resp.ContentLength
+  if ($have -gt 0) { $req.AddRange([long]$have) }
+  try { $resp = $req.GetResponse() } catch {
+    # 416: the part file is already complete or unusable; start over
+    if ($have -gt 0) { Remove-Item -Force $part; $have = 0; $req = [System.Net.HttpWebRequest]::Create($url); $req.UserAgent = "Shelly-Pi-installer"; $resp = $req.GetResponse() } else { throw }
+  }
+  if ($have -gt 0 -and [int]$resp.StatusCode -eq 206) {
+    $total = $have + $resp.ContentLength
+    Write-Host ("    Continuing the earlier download from {0} MB" -f [math]::Round($have / 1MB))
+    $out = New-Object System.IO.FileStream($part, [System.IO.FileMode]::Append)
+  } else {
+    $have = 0
+    $total = $resp.ContentLength
+    $out = [System.IO.File]::Create($part)
+  }
   $in = $resp.GetResponseStream()
-  $out = [System.IO.File]::Create($part)
   try {
     $buf = New-Object byte[] (1024 * 1024)
-    [long]$done = 0
+    [long]$done = $have
+    [long]$start = $have
     $clock = [System.Diagnostics.Stopwatch]::StartNew()
     $lastShown = -1
     while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
@@ -286,7 +299,7 @@ function Get-File([string]$url, [string]$dest) {
       if ($sec -ne $lastShown) {
         $lastShown = $sec
         $mb = [math]::Round($done / 1MB)
-        $speed = if ($clock.Elapsed.TotalSeconds -gt 0) { [math]::Round($done / 1MB / $clock.Elapsed.TotalSeconds, 1) } else { 0 }
+        $speed = if ($clock.Elapsed.TotalSeconds -gt 0) { [math]::Round(($done - $start) / 1MB / $clock.Elapsed.TotalSeconds, 1) } else { 0 }
         if ($total -gt 0) {
           $pct = [math]::Floor($done * 100 / $total)
           Write-Host ("`r    {0} of {1} MB ({2}%)  {3} MB/s   " -f $mb, [math]::Round($total / 1MB), $pct, $speed) -NoNewline
