@@ -312,6 +312,15 @@ if [ "$CURRENT_HOST" != "$NEW_HOSTNAME" ]; then
     NEW_HOSTNAME="$CURRENT_HOST"
   fi
 fi
+# The app runs in a container, so it can't see the Pi's host name; tell it, so the HTTPS certificate is made for
+# the real name (and not for "localhost").
+if grep -q '^SM_HOSTNAME=' "$CONF/env"; then
+  sed -i "s/^SM_HOSTNAME=.*/SM_HOSTNAME=$NEW_HOSTNAME/" "$CONF/env"
+else
+  echo "SM_HOSTNAME=$NEW_HOSTNAME" >> "$CONF/env"
+fi
+systemctl restart shelly-app.service
+
 # Answer "<hostname>.local" lookups from the home network.
 if systemctl list-unit-files systemd-resolved.service >/dev/null 2>&1; then
   install -d -m 0755 /etc/systemd/resolved.conf.d
