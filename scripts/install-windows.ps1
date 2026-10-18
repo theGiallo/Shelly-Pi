@@ -130,6 +130,13 @@ function Get-FedoraImage {
     }
     $best = $cands | Sort-Object @{ Expression = { $_.Release } }, @{ Expression = { $_.Build.Split(".")[0] } }, @{ Expression = { [int]$_.Build.Split(".")[1] } } | Select-Object -Last 1
     $name = $best.Name; $url = $best.Url; $sumUrl = $best.SumUrl
+    if (-not $sumUrl) {
+      # the page didn't link a checksum file: look where Fedora keeps it, next to the image on the main server
+      $dirUrl = "https://dl.fedoraproject.org/pub/alt/iot/$($best.Release)/IoT/aarch64/images/"
+      foreach ($cand in @("Fedora-IoT-$($best.Release)-aarch64-$($best.Build)-CHECKSUM", "Fedora-IoT-$($best.Release)-$($best.Build)-aarch64-CHECKSUM")) {
+        try { [void](Get-Text "$dirUrl$cand"); $sumUrl = "$dirUrl$cand"; break } catch { }
+      }
+    }
   }
   Note "Found $name"
   $dest = Join-Path $Cache $name
