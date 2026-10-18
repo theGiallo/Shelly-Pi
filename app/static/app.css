@@ -1,4 +1,4 @@
-/* Shelly Monitor: an electrical-panel look.
+/* Shelly-Pi: an electrical-panel look.
    DIN-style numerals (Bahnschrift on Windows, DIN Alternate on macOS) for
    readouts, the system UI font for everything else. No web fonts, no CDNs:
    this runs on a network with no internet. */

@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Settings &ndash; Shelly Monitor</title>
+  <title>Settings &ndash; Shelly-Pi</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   <header class="bar">
-    <a class="brand" href="/">Shelly Monitor</a>
+    <a class="brand" href="/">Shelly-Pi</a>
     <nav class="nav" aria-label="Main">
       <a href="/" data-page="dashboard">Dashboard</a>
       <a href="/add" data-page="add">Add plug</a>
@@ -150,7 +150,7 @@
       <div class="actions">
         <a class="btn primary" id="bk-download" href="/api/backup" download>Download a backup</a>
       </div>
-      <p class="note" id="bk-name">The file is named with the date and time, like shelly-monitor_2026-10-17_03-53-00.zip.</p>
+      <p class="note" id="bk-name">The file is named with the date and time, like shelly-pi_2026-10-17_03-53-00.zip.</p>
       <p class="note">It doesn't contain the dashboard or Wi-Fi password.</p>
 
       <h3 class="sub-h">Restore from a backup</h3>
@@ -170,7 +170,7 @@
 
     <section class="section" id="usb" aria-labelledby="h-usb">
       <h2 id="h-usb">Automatic backups to a USB drive</h2>
-      <p>Plug a USB stick or drive into the Pi and it saves a backup there on a schedule, so a copy always exists apart from the SD card. Nothing on the drive is changed or formatted: backups go into a folder called <code>shelly-monitor-backups</code>, and the Pi only ever deletes its own older backups from that folder. The drive is used just while a backup is copied, so you can unplug it at any other time.</p>
+      <p>Plug a USB stick or drive into the Pi and it saves a backup there on a schedule, so a copy always exists apart from the SD card. Nothing on the drive is changed or formatted: backups go into a folder called <code>shelly-pi-backups</code>, and the Pi only ever deletes its own older backups from that folder. The drive is used just while a backup is copied, so you can unplug it at any other time.</p>
       <div class="field check">
         <input id="ab-enabled" type="checkbox">
         <label for="ab-enabled">Back up automatically</label>

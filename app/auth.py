@@ -46,7 +46,7 @@ class BasicAuthMiddleware:
         resp = Response(
             "Authentication required",
             status_code=401,
-            headers={"WWW-Authenticate": 'Basic realm="Shelly Monitor", charset="UTF-8"'},
+            headers={"WWW-Authenticate": 'Basic realm="Shelly-Pi", charset="UTF-8"'},
         )
         await resp(scope, receive, send)
 

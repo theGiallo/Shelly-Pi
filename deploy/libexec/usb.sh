@@ -2,7 +2,7 @@
 # Lists the USB drives plugged into the Pi and copies backups onto one of them.
 #
 # The web app runs in a container that cannot see the host's drives, so it drops
-# a one-line request into /var/lib/shelly-monitor/bridge/usb.req and
+# a one-line request into /var/lib/shelly-pi/bridge/usb.req and
 # shelly-usb.path starts this script as root. The answer goes to usb.res.json.
 #
 # Requests (the first word is an id the app uses to recognise its answer):
@@ -11,16 +11,16 @@
 #
 # Nothing is ever formatted or partitioned. A drive is mounted only while a backup
 # is copied, then unmounted, so it can be unplugged at any other time. Backups go
-# in the folder "shelly-monitor-backups" and only files named
-# shelly-monitor_*.zip in that folder are ever deleted.
+# in the folder "shelly-pi-backups" and only files named
+# shelly-pi_*.zip in that folder are ever deleted.
 set -u
 export LC_ALL=C   # awk handles bytes, not characters, so names pass through untouched
 
-BRIDGE=${SHELLY_BRIDGE:-/var/lib/shelly-monitor/bridge}
+BRIDGE=${SHELLY_BRIDGE:-/var/lib/shelly-pi/bridge}
 REQ=$BRIDGE/usb.req
 RES=$BRIDGE/usb.res.json
 OUT=$BRIDGE/outgoing
-FOLDER=shelly-monitor-backups
+FOLDER=shelly-pi-backups
 SUPPORTED="vfat exfat ntfs ext2 ext3 ext4 btrfs xfs"
 MNT=${SHELLY_USB_MNT:-/run/shelly-usb}
 
@@ -121,7 +121,7 @@ UUID=$(printf '%s' "$LINE" | awk '{print $3}' | tr -cd 'A-Za-z0-9-' | head -c 64
 NAME=$(printf '%s' "$LINE" | awk '{print $4}')
 KEEP=$(printf '%s' "$LINE" | awk '{print $5}' | tr -cd '0-9' | head -c 4)
 case "$NAME" in
-  shelly-monitor_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].zip) ;;
+  shelly-pi_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].zip) ;;
   *) fail "That isn't a backup file name." ;;
 esac
 [ -n "$UUID" ] || fail "No drive was named."
@@ -178,18 +178,18 @@ mv -f "$DIR/.$NAME.part" "$DIR/$NAME" || fail "Couldn't finish the copy."
 # Keep the newest $KEEP, by name (names sort by date). Nothing else in the folder is touched.
 is_backup() {
   case "$1" in
-    shelly-monitor_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].zip) return 0 ;;
+    shelly-pi_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].zip) return 0 ;;
     *) return 1 ;;
   esac
 }
 COUNT=0
-for f in "$DIR"/shelly-monitor_*.zip; do
+for f in "$DIR"/shelly-pi_*.zip; do
   if [ -f "$f" ] && is_backup "${f##*/}"; then COUNT=$((COUNT + 1)); fi
 done
 REMOVED=0
 if [ "$COUNT" -gt "$KEEP" ]; then
   EXCESS=$((COUNT - KEEP))
-  for f in "$DIR"/shelly-monitor_*.zip; do        # the shell lists them in name order
+  for f in "$DIR"/shelly-pi_*.zip; do        # the shell lists them in name order
     [ "$EXCESS" -gt 0 ] || break
     if [ -f "$f" ] && is_backup "${f##*/}"; then rm -f "$f"; EXCESS=$((EXCESS - 1)); REMOVED=$((REMOVED + 1)); fi
   done

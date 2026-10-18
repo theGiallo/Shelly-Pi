@@ -31,7 +31,7 @@ Then continue at step 1 below, skipping the copy and setup lines.
 | Phone: look for the Wi-Fi name you chose | It is listed | `nmcli connection show shelly-ap`, `iw dev wlan0 info` |
 | Join it with the password | Connects, gets `192.168.50.x` | `journalctl -u shelly-dhcp -n 50` |
 | On the phone open `http://192.168.50.1/` | The dashboard asks for the password | `ss -ltnp \| grep :80` on the Pi |
-| `cat /var/lib/shelly-monitor/dnsmasq/dnsmasq.leases` | Your phone is listed | same |
+| `cat /var/lib/shelly-pi/dnsmasq/dnsmasq.leases` | Your phone is listed | same |
 
 ## 3. Hardware clock (power the Pi off to wire it)
 
@@ -69,7 +69,7 @@ page at `http://<plug-address>/`.
 | Switch the plug off and on from the dashboard | The plug clicks, the row follows within a second | |
 | Press the plug's own button | The dashboard follows within ~10 s | |
 | Pull the plug's power for a minute and restore it | Row goes "not responding", then recovers on its own | |
-| `ls /var/lib/shelly-monitor/dhcp-hosts.d` | One `.conf` file per plug | |
+| `ls /var/lib/shelly-pi/dhcp-hosts.d` | One `.conf` file per plug | |
 | Reboot the Pi | Plugs reconnect by themselves, same addresses, a gap in the chart | `journalctl -u shelly-dhcp -b` |
 | Cut the router's internet (or Ethernet) | Plugs keep logging; the dashboard works from the plugs' Wi-Fi | |
 | Leave it for an hour, then check Settings, "Stored data" | Readings counted, no "last save failed" | |
@@ -88,9 +88,9 @@ page at `http://<plug-address>/`.
 
 | Step | Expect | If not |
 |---|---|---|
-| Settings, **Download a backup** | A file named `shelly-monitor_<date>_<time>.zip` with your local time | Screenshot of the file name |
+| Settings, **Download a backup** | A file named `shelly-pi_<date>_<time>.zip` with your local time | Screenshot of the file name |
 | Change a plug's name, then restore that file | Old name is back, plugs keep reporting, charts intact | `journalctl -u shelly-app -n 80` |
-| `ls /var/lib/shelly-monitor/pre-restore` | The data from just before the restore | |
+| `ls /var/lib/shelly-pi/pre-restore` | The data from just before the restore | |
 | Try restoring some other zip | A clear refusal, nothing changed | |
 
 ### 7b. Automatic backups to a USB drive
@@ -99,8 +99,8 @@ Needs a USB stick (exFAT, FAT32, NTFS or ext4) with nothing you can't lose on it
 
 | Step | Expect | If not |
 |---|---|---|
-| Settings, **Automatic backups**, plug the stick in, **Look again** | Your stick is listed with its name, size and format | `systemctl status shelly-usb.path`; `sudo /usr/local/libexec/shelly-monitor/usb.sh` after `echo "x list" \| sudo tee /var/lib/shelly-monitor/bridge/usb.req`; then `cat /var/lib/shelly-monitor/bridge/usb.res.json` |
-| Choose it, leave 24 hours / 0:00, switch on, **Save**, then **Back up now** | "Done. You can unplug the drive now"; on a computer the stick has a `shelly-monitor-backups` folder with the zip, and your other files are untouched | The red text under **Last backup** and `journalctl -u shelly-usb -n 40` |
+| Settings, **Automatic backups**, plug the stick in, **Look again** | Your stick is listed with its name, size and format | `systemctl status shelly-usb.path`; `sudo /usr/local/libexec/shelly-pi/usb.sh` after `echo "x list" \| sudo tee /var/lib/shelly-pi/bridge/usb.req`; then `cat /var/lib/shelly-pi/bridge/usb.res.json` |
+| Choose it, leave 24 hours / 0:00, switch on, **Save**, then **Back up now** | "Done. You can unplug the drive now"; on a computer the stick has a `shelly-pi-backups` folder with the zip, and your other files are untouched | The red text under **Last backup** and `journalctl -u shelly-usb -n 40` |
 | `findmnt /run/shelly-usb` right after | Nothing: the stick is not left mounted | |
 | Unplug the stick, **Back up now** | A clear "The drive isn't connected" | |
 | Set the interval to every hour, keep 2, press **Back up now** three times | Only the 2 newest files remain; any file you put in that folder yourself stays | |
@@ -115,7 +115,7 @@ Needs a USB stick (exFAT, FAT32, NTFS or ext4) with nothing you can't lose on it
 | Download the authority, trust it on your PC and phone, open `https://shellypi.local/` | Padlock, no warning | The browser's error text and which device |
 | Tick "Send plain HTTP visitors to HTTPS", open `http://<pi-address>/` | It jumps to https | |
 | Change the Pi's address (new DHCP lease) and wait 5 minutes | Settings lists the new address among the covered names | |
-| `ls /var/lib/shelly-monitor/tls` | `ca.crt ca.key server.crt server.key` | |
+| `ls /var/lib/shelly-pi/tls` | `ca.crt ca.key server.crt server.key` | |
 
 ## 9. What to send me if something is off
 

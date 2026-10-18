@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build the arm64 container image on your PC and save it as shelly-monitor-image.tar,
+# Build the arm64 container image on your PC and save it as shelly-pi-image.tar,
 # ready to copy to the Pi (setup-host.sh loads it automatically).
 # Needs podman or docker (with buildx and arm64 emulation, e.g. Docker Desktop).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-IMAGE=localhost/shelly-monitor:latest
-OUT=shelly-monitor-image.tar
+IMAGE=localhost/shelly-pi:latest
+OUT=shelly-pi-image.tar
 
 if command -v podman >/dev/null 2>&1; then
   podman build --platform linux/arm64 -t "$IMAGE" -f Containerfile .

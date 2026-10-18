@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepare a ready-to-boot SD card for the Raspberry Pi 4: Fedora IoT, with Shelly Monitor already
+# Prepare a ready-to-boot SD card for the Raspberry Pi 4: Fedora IoT, with Shelly-Pi already
 # installed and its Wi-Fi access point already configured. Run it on a Fedora PC, as root:
 #
 #     sudo bash scripts/prepare-sd.sh --media /dev/sdX
@@ -23,8 +23,8 @@
 #   --hostname NAME        the Pi's host name (default shellypi)
 #   --channel N            Wi-Fi channel 1-11 (default 6)      --country CC   (default IT)
 #   --no-rtc               no DS3231 clock module
-#   --app-image FILE       shelly-monitor-image.tar built earlier (default: build it here)
-#   --cache DIR            where downloads are kept (default ~/.cache/shelly-monitor)
+#   --app-image FILE       shelly-pi-image.tar built earlier (default: build it here)
+#   --cache DIR            where downloads are kept (default ~/.cache/shelly-pi)
 #   --yes                  don't ask for confirmation before erasing the card
 #   --inject-only DIR      skip download and writing: only copy the setup files into an already mounted
 #                          Fedora IoT root file system at DIR (for testing, or if you flash it yourself)
@@ -104,10 +104,10 @@ inject() {
   install -d -m 0700 "$target" "$target/project"
   tar -C "$PROJECT" \
       --exclude=.git --exclude=.venv --exclude=__pycache__ --exclude=.pytest_cache --exclude=demo-data \
-      --exclude='*.tar.gz' --exclude='sd-credentials_*' --exclude='shelly-monitor-image.tar' -cf - . \
+      --exclude='*.tar.gz' --exclude='sd-credentials_*' --exclude='shelly-pi-image.tar' -cf - . \
     | tar -C "$target/project" -xf -
   if [ -n "$APP_IMAGE" ]; then
-    cp "$APP_IMAGE" "$target/project/shelly-monitor-image.tar"
+    cp "$APP_IMAGE" "$target/project/shelly-pi-image.tar"
   else
     warn "No container image was copied: the Pi will have to build it, which needs internet on the first boot."
   fi
@@ -179,7 +179,7 @@ main() {
   arm-image-installer --image="$IMAGE" --media="$MEDIA" --target=rpi4 \
     --addkey="$SSH_KEY" --norootpass --resizefs -y
 
-  say "Adding Shelly Monitor"
+  say "Adding Shelly-Pi"
   udevadm settle 2>/dev/null || true
   partprobe "$MEDIA" 2>/dev/null || true
   sleep 2
@@ -245,7 +245,7 @@ fetch_image() {
     return 0
   fi
   local cache="${CACHE:-${SUDO_USER:+$(getent passwd "$SUDO_USER" | cut -d: -f6)}}"
-  cache="${cache:-$HOME}"; [ -n "$CACHE" ] || cache="$cache/.cache/shelly-monitor"
+  cache="${cache:-$HOME}"; [ -n "$CACHE" ] || cache="$cache/.cache/shelly-pi"
   mkdir -p "$cache"
   local url="$BASE_URL/$RELEASE/IoT/aarch64/images/"
   say "Looking for the newest Fedora IoT $RELEASE image"
@@ -297,20 +297,20 @@ fetch_image() {
 
 build_app_image() {
   if [ -n "$APP_IMAGE" ]; then note "Using the app image $APP_IMAGE"; return 0; fi
-  if [ -f "$PROJECT/shelly-monitor-image.tar" ]; then
-    APP_IMAGE="$PROJECT/shelly-monitor-image.tar"; note "Using $APP_IMAGE"; return 0
+  if [ -f "$PROJECT/shelly-pi-image.tar" ]; then
+    APP_IMAGE="$PROJECT/shelly-pi-image.tar"; note "Using $APP_IMAGE"; return 0
   fi
   say "Building the app's container image for the Pi (arm64)"
   note "This needs podman or docker, arm64 emulation (Fedora: sudo dnf install podman qemu-user-static) and internet."
   bash "$SCRIPT_DIR/build-image.sh" || die "The image couldn't be built. Build it elsewhere and pass --app-image FILE."
-  APP_IMAGE="$PROJECT/shelly-monitor-image.tar"
+  APP_IMAGE="$PROJECT/shelly-pi-image.tar"
 }
 
 save_credentials() {
   [ "$#" -gt 0 ] || return 0
   local f; f="sd-credentials_$(date '+%Y-%m-%d_%H-%M-%S').txt"
   {
-    echo "Shelly Monitor, set up $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Shelly-Pi, set up $(date '+%Y-%m-%d %H:%M:%S')"
     echo "Plugs' Wi-Fi name: $SSID"
     echo "Host name: $HOSTNAME_WANTED   (http://$HOSTNAME_WANTED.local/, user admin)"
     for g in "$@"; do echo "$g"; done

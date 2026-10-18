@@ -1,5 +1,5 @@
 [Unit]
-Description=Shelly Monitor first-boot setup
+Description=Shelly-Pi first-boot setup
 Documentation=file:///var/lib/shelly-install/project/README.md
 After=network-online.target NetworkManager.service
 Wants=network-online.target

@@ -102,7 +102,7 @@ The container image has to be built once, which needs internet. Pick one:
 
 - **Build on the Pi**: plug your phone-tethering adapter into the router for a few minutes.
   `setup-host.sh` builds the image itself if it doesn't find one.
-- **Build on your PC**: `bash scripts/build-image.sh` writes `shelly-monitor-image.tar` (needs podman
+- **Build on your PC**: `bash scripts/build-image.sh` writes `shelly-pi-image.tar` (needs podman
   or Docker with arm64 emulation). Copy it into the project folder on the Pi and the script
   loads it, so the Pi never needs internet for this step.
 
@@ -151,7 +151,7 @@ phone and scan the code, which tells the plug to join the Pi's network.
   a plug that the dashboard can switch off.
 - **Chart styles**: **Power** (watts), **Energy** (Wh or kWh per period) and **Cost** (once prices are set; until then a *Set up cost* link goes to the price settings). **Instant** shows each moment or period, **Cumulative** a running total from the start of the range (it applies to Energy and Cost; choosing it on Power switches to Energy). Every chart says its unit in its corner. **All plugs together** above the rows stacks the plugs on top of each other in their own colours and follows the same choices.
 - **Backup and restore**: Settings, **Backup and restore** (see below).
-- **Settings** you may want to change live in `/var/lib/shelly-monitor/config.json`
+- **Settings** you may want to change live in `/var/lib/shelly-pi/config.json`
   (`poll_interval` 10 s, `flush_interval` 300 s, `raw_retention_days` 7, `r1m_retention_days` 90),
   then `sudo systemctl restart shelly-app`.
 
@@ -185,7 +185,7 @@ internet, no domain name and no yearly renewal job:
 Things to know:
 - HTTP on port 80 stays available until you tick that box, because devices need it to fetch the authority.
 - The authority is limited to `.local` names, the Pi's host name, `localhost` and private addresses, and its
-  key stays on the Pi (`/var/lib/shelly-monitor/tls`). Neither it nor the certificates are in backups, so a
+  key stays on the Pi (`/var/lib/shelly-pi/tls`). Neither it nor the certificates are in backups, so a
   new Pi or card makes a new authority and your devices need the new one. Changing the Pi's host name also
   needs a new authority ("Start over" on that page).
 - `.local` names need mDNS on your PC or phone (normal on macOS, iOS, Android and Windows 10+, and on Linux
@@ -196,14 +196,14 @@ Things to know:
 
 ### Backup and restore
 
-Settings, **Backup and restore**, downloads one zip named like `shelly-monitor_2026-10-17_03-53-00.zip`
+Settings, **Backup and restore**, downloads one zip named like `shelly-pi_2026-10-17_03-53-00.zip`
 (year-month-day_hour-minute-second, so a folder of backups sorts by date; the time is the Pi's clock in
 the time zone of the device you download from). It holds the whole database (plugs, all readings and
 rollups, electricity prices), the address each plug is pinned to, the polling and storage settings, and a
 small manifest. The dashboard and Wi-Fi passwords are left out, so the file is safe to keep around.
 
 To restore, choose the zip on the same page and confirm. The Pi checks the archive (a damaged or foreign
-file is refused and nothing is changed), copies the current data to `/var/lib/shelly-monitor/pre-restore`,
+file is refused and nothing is changed), copies the current data to `/var/lib/shelly-pi/pre-restore`,
 swaps the data in and carries on polling without a restart.
 
 - A restore replaces the data, the plugs' address reservations and the settings that tune polling and
@@ -222,7 +222,7 @@ swaps the data in and carries on polling without a restart.
 ### Adding a plug: joining its Wi-Fi by scanning
 
 The **Add plug** page starts by looking for the plug's own setup network (named like `ShellyPlugMG3-A1B2C3`).
-The Pi scans for it through a small root helper (`/usr/local/libexec/shelly-monitor/wifiscan.sh`, started by
+The Pi scans for it through a small root helper (`/usr/local/libexec/shelly-pi/wifiscan.sh`, started by
 `shelly-wifiscan.path`, installed by `setup-host.sh`), keeps the networks whose names look like a Shelly's, and
 shows one QR code that makes a phone join the strongest one. If it finds more than one it says so, selects the
 strongest, and lists the others (with their signal, and "already added as ..." for plugs you already have);
@@ -231,7 +231,7 @@ choosing another changes the code. The next step's code then tells the plug to j
 - Scanning while the Pi hosts its own network works on most Pi Wi-Fi chips but not every one, and a scan can
   make the plugs' connections stutter for a moment, so the page scans every 8 seconds and only while open.
   If your Pi can't, the page says why and you join the plug's network by hand as before. A second USB Wi-Fi
-  adapter fixes it: add `SM_SCAN_IFACE=wlan1` (its name) to `/etc/shelly-monitor/env`.
+  adapter fixes it: add `SM_SCAN_IFACE=wlan1` (its name) to `/etc/shelly-pi/env`.
 - It needs `iw` on the Pi (it falls back to `nmcli`, which may refuse while hosting). `setup-host.sh` warns if
   `iw` is missing.
 - Only an open network gets a code; a plug network with a password is shown with a note to join by hand.
@@ -246,11 +246,11 @@ in the time zone shown there), keeping the newest 14. You can pick another inter
 unplug the drive.
 
 - **The drive is never formatted or changed.** Backups, the same zip as the download, go into a folder
-  `shelly-monitor-backups` on it. Only files named `shelly-monitor_<date>_<time>.zip` in that folder are
+  `shelly-pi-backups` on it. Only files named `shelly-pi_<date>_<time>.zip` in that folder are
   ever deleted (the oldest, beyond the number to keep). It needs a filesystem the Pi can write: exFAT,
   FAT32, NTFS or ext4. Other drives are listed greyed out.
 - The app runs in a container that can't see the Pi's drives, so a small root script on the Pi
-  (`/usr/local/libexec/shelly-monitor/usb.sh`, started by `shelly-usb.path`, installed by `setup-host.sh`)
+  (`/usr/local/libexec/shelly-pi/usb.sh`, started by `shelly-usb.path`, installed by `setup-host.sh`)
   lists the USB drives and copies the finished backup. It mounts the drive only for the copy and
   unmounts it again, so the stick can be pulled out safely between backups. It only offers USB drives,
   never the SD card, and only copies files with a backup's name.
@@ -287,7 +287,7 @@ on a 15-minute step. Rules:
 | Plugs' Wi-Fi isn't visible | `nmcli connection show shelly-ap`, `journalctl -u NetworkManager -n 50`. Pick a different `--channel` if the router uses the same one. |
 | Phone joins the Wi-Fi but gets no address | `journalctl -u shelly-dhcp -n 50` |
 | Dashboard won't load | `journalctl -u shelly-app -n 50`, `curl localhost/healthz` |
-| Plug never shows up in the wizard | `cat /var/lib/shelly-monitor/dnsmasq/dnsmasq.leases`: if the plug is listed but not shown, open its address with "I know the plug's address". |
+| Plug never shows up in the wizard | `cat /var/lib/shelly-pi/dnsmasq/dnsmasq.leases`: if the plug is listed but not shown, open its address with "I know the plug's address". |
 | Clock warning chip | Settings, **Set the Pi's clock** |
 | "The Pi did not apply the new time" | `systemctl status shelly-settime.path`, `journalctl -u shelly-settime -n 20` |
 | No `/dev/rtc0` | wiring and `config.txt`; `dmesg | grep -i -E "rtc|ds1307|i2c"` |

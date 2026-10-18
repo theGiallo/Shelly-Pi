@@ -2,11 +2,11 @@
 # Applies a "set the clock" request made from the web page.
 #
 # The web app runs in a container and cannot change the host's clock, so it
-# drops a Unix timestamp into /var/lib/shelly-monitor/bridge/settime.req.
+# drops a Unix timestamp into /var/lib/shelly-pi/bridge/settime.req.
 # shelly-settime.path notices the file and starts this script as root.
 set -eu
 
-REQ=/var/lib/shelly-monitor/bridge/settime.req
+REQ=/var/lib/shelly-pi/bridge/settime.req
 MIN=1767225600     # 2026-01-01, same lower bound as the app
 MAX=4102444800     # 2100-01-01
 

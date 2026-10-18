@@ -1,6 +1,6 @@
 [Unit]
-Description=Set the system and hardware clock from a Shelly Monitor request
+Description=Set the system and hardware clock from a Shelly-Pi request
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/libexec/shelly-monitor/settime.sh
+ExecStart=/usr/local/libexec/shelly-pi/settime.sh

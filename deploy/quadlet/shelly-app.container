@@ -1,19 +1,19 @@
 # Quadlet unit (podman-systemd). Installed to /etc/containers/systemd/ by setup-host.sh.
 # Generates shelly-app.service.
 [Unit]
-Description=Shelly Monitor web app
+Description=Shelly-Pi web app
 Wants=network-online.target shelly-dhcp.service
 After=network-online.target shelly-dhcp.service
 
 [Container]
-Image=localhost/shelly-monitor:latest
+Image=localhost/shelly-pi:latest
 ContainerName=shelly-app
 # Host networking: the app reaches the plugs on the Wi-Fi subnet directly
 # and serves the dashboard on every interface (Ethernet and the plugs' Wi-Fi).
 Network=host
 # :z = shared SELinux label (the DHCP container uses the same folder).
-Volume=/var/lib/shelly-monitor:/data:z
-EnvironmentFile=/etc/shelly-monitor/env
+Volume=/var/lib/shelly-pi:/data:z
+EnvironmentFile=/etc/shelly-pi/env
 Environment=SM_DATA_DIR=/data
 
 [Service]

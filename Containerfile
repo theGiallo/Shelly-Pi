@@ -1,7 +1,7 @@
 # One image, two jobs: the web app (default command) and the DHCP server for
 # the plugs' Wi-Fi (dnsmasq, started by the shelly-dhcp unit with run-dhcp).
 #
-# Build on the Pi (needs internet once):   podman build -t localhost/shelly-monitor:latest .
+# Build on the Pi (needs internet once):   podman build -t localhost/shelly-pi:latest .
 # Or on a PC for the Pi:                   scripts/build-image.sh
 FROM docker.io/library/python:3.13-slim
 

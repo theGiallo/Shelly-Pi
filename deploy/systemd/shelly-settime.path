@@ -1,8 +1,8 @@
 [Unit]
-Description=Watch for a set-the-clock request from the Shelly Monitor web page
+Description=Watch for a set-the-clock request from the Shelly-Pi web page
 
 [Path]
-PathExists=/var/lib/shelly-monitor/bridge/settime.req
+PathExists=/var/lib/shelly-pi/bridge/settime.req
 Unit=shelly-settime.service
 
 [Install]

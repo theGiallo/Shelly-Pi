@@ -2,18 +2,18 @@
 # Lists the Wi-Fi networks the Pi can see, for the "Add plug" page.
 #
 # The web app runs in a container and can't scan, so it drops "<id> scan" into
-# /var/lib/shelly-monitor/bridge/wifiscan.req; shelly-wifiscan.path starts this script as
+# /var/lib/shelly-pi/bridge/wifiscan.req; shelly-wifiscan.path starts this script as
 # root; the answer goes to wifiscan.res.json. Nothing is changed on the Pi.
 #
 # Scanning uses the interface in SM_SCAN_IFACE, or else SM_AP_IFACE, from
-# /etc/shelly-monitor/env (the Wi-Fi the Pi also hosts its own network on). Scanning while
+# /etc/shelly-pi/env (the Wi-Fi the Pi also hosts its own network on). Scanning while
 # hosting works on most Pi Wi-Fi chips but can fail on some; a second USB Wi-Fi adapter
 # named in SM_SCAN_IFACE avoids the question.
 set -u
 export LC_ALL=C   # awk handles bytes, not characters, so names pass through untouched
 
-BRIDGE=${SHELLY_BRIDGE:-/var/lib/shelly-monitor/bridge}
-ENVFILE=${SHELLY_ENVFILE:-/etc/shelly-monitor/env}
+BRIDGE=${SHELLY_BRIDGE:-/var/lib/shelly-pi/bridge}
+ENVFILE=${SHELLY_ENVFILE:-/etc/shelly-pi/env}
 REQ=$BRIDGE/wifiscan.req
 RES=$BRIDGE/wifiscan.res.json
 

@@ -143,7 +143,7 @@ def main() -> None:
     db.close()
 
     fake_wifi_scanner(cfg.bridge_dir, args.aps)
-    print(f"\nShelly Monitor demo: http://127.0.0.1:{args.port}\n")
+    print(f"\nShelly-Pi demo: http://127.0.0.1:{args.port}\n")
     # Open browser tabs hold a live-update stream; without a time limit Ctrl+C would wait for them forever.
     uvicorn.run(create_app(cfg), host=cfg.host, port=cfg.port, log_level="warning", timeout_graceful_shutdown=2)
 

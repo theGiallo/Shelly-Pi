@@ -1,8 +1,8 @@
 [Unit]
-Description=Watch for a Wi-Fi scan request from the Shelly Monitor web page
+Description=Watch for a Wi-Fi scan request from the Shelly-Pi web page
 
 [Path]
-PathExists=/var/lib/shelly-monitor/bridge/wifiscan.req
+PathExists=/var/lib/shelly-pi/bridge/wifiscan.req
 Unit=shelly-wifiscan.service
 
 [Install]

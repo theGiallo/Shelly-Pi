@@ -21,7 +21,7 @@ KNAME="sdb1" TYPE="part" SIZE="500000000000" FSTYPE="LVM2_member" LABEL="" UUID=
 KNAME="nvme0n1p1" TYPE="part" SIZE="1" FSTYPE="ext4" LABEL="internal" UUID="nvme-1" MODEL="" VENDOR="" TRAN="nvme" HOTPLUG="0" PKNAME="nvme0n1" MOUNTPOINT=""
 """
 
-NAME = "shelly-monitor_2026-10-17_00-00-00.zip"
+NAME = "shelly-pi_2026-10-17_00-00-00.zip"
 
 
 @pytest.fixture
@@ -57,19 +57,19 @@ def test_lists_only_usb_partitions(helper):
 
 
 def test_copy_prunes_only_backups(helper):
-    folder = helper.drive / "shelly-monitor-backups"
+    folder = helper.drive / "shelly-pi-backups"
     folder.mkdir()
     for d in ("01", "02", "03"):
-        (folder / f"shelly-monitor_2026-01-{d}_00-00-00.zip").write_text("old")
+        (folder / f"shelly-pi_2026-01-{d}_00-00-00.zip").write_text("old")
     (folder / "notes.txt").write_text("mine")
-    (folder / "shelly-monitor_holiday.zip").write_text("mine too")
+    (folder / "shelly-pi_holiday.zip").write_text("mine too")
     (helper.drive / "photo.jpg").write_text("not touched")
     (helper.bridge / "outgoing" / NAME).write_bytes(b"z" * 5000)
 
     r = helper(f"c1 copy 1234-ABCD {NAME} 2")
     assert r["ok"] is True and r["file"] == NAME and r["bytes"] == 5000 and r["removed"] == 2
     left = sorted(p.name for p in folder.iterdir())
-    assert left == ["notes.txt", "shelly-monitor_2026-01-03_00-00-00.zip", NAME, "shelly-monitor_holiday.zip"]
+    assert left == ["notes.txt", "shelly-pi_2026-01-03_00-00-00.zip", NAME, "shelly-pi_holiday.zip"]
     assert (folder / NAME).read_bytes() == b"z" * 5000
     assert (helper.drive / "photo.jpg").read_text() == "not touched"
     assert not any(p.name.startswith(".") for p in folder.iterdir())   # no half-written leftovers
@@ -80,9 +80,9 @@ def test_copy_prunes_only_backups(helper):
     ("c3 copy aaaa-root {n} 5", "isn't connected"),             # the Pi's own disk is never offered
     ("c4 copy nvme-1 {n} 5", "isn't connected"),
     ("c5 copy 1234-ABCD ../../etc/passwd 5", "backup file name"),
-    ("c6 copy 1234-ABCD shelly-monitor_x.zip 5", "backup file name"),
+    ("c6 copy 1234-ABCD shelly-pi_x.zip 5", "backup file name"),
     ("c7 copy 1234-ABCD {n} 0", "Keep between"),
-    ("c8 copy 1234-ABCD shelly-monitor_2026-10-18_00-00-00.zip 5", "isn't there"),
+    ("c8 copy 1234-ABCD shelly-pi_2026-10-18_00-00-00.zip 5", "isn't there"),
     ("c9 format 1234-ABCD", "Unknown"),
 ])
 def test_refuses(helper, line, why):

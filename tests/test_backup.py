@@ -14,7 +14,7 @@ import pytest
 
 from app import backup
 
-NAME_RE = re.compile(r"^shelly-monitor_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.zip$")
+NAME_RE = re.compile(r"^shelly-pi_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.zip$")
 TARIFF = {"enabled": True, "currency": "CHF", "currency_after": True, "decimals": 2,
           "timezone": "Europe/Zurich", "base_price": 0.31, "slots": []}
 
@@ -23,8 +23,8 @@ def test_archive_name_is_sortable_and_uses_the_zone():
     rome = ZoneInfo("Europe/Rome")
     a = backup.archive_name(1_792_200_000, rome)     # 2026-10-17 ~01:20 UTC
     assert NAME_RE.match(a)
-    assert a == "shelly-monitor_2026-10-17_03-20-00.zip"          # +02:00
-    assert backup.archive_name(1_792_200_000, ZoneInfo("UTC")) == "shelly-monitor_2026-10-17_01-20-00.zip"
+    assert a == "shelly-pi_2026-10-17_03-20-00.zip"          # +02:00
+    assert backup.archive_name(1_792_200_000, ZoneInfo("UTC")) == "shelly-pi_2026-10-17_01-20-00.zip"
     names = [backup.archive_name(t, rome) for t in (1_792_200_000 + 86400 * k for k in (3, 0, 40, 1))]
     assert sorted(names) == [backup.archive_name(t, rome) for t in sorted(1_792_200_000 + 86400 * k for k in (3, 0, 40, 1))]
     assert backup.zone_or("Not/AZone", "UTC").key == "UTC"
@@ -50,7 +50,7 @@ def test_export_contents(run_app, settings):
     fname = re.search(r'filename="?([^";]+)"?', r.headers["content-disposition"]).group(1)
     assert NAME_RE.match(fname), fname
     z = zipfile.ZipFile(io.BytesIO(r.content))
-    assert sorted(z.namelist()) == ["config.json", "dhcp-hosts.d/plug-kettle-ee01.conf", "manifest.json", "shelly-monitor.db"]
+    assert sorted(z.namelist()) == ["config.json", "dhcp-hosts.d/plug-kettle-ee01.conf", "manifest.json", "shelly-pi.db"]
     cfg = json.loads(z.read("config.json"))
     assert "password" not in cfg and "ap_password" not in cfg and cfg["ap_ssid"] == "Mine"
     assert b"dash-secret" not in r.content and b"wifi-secret" not in r.content
@@ -59,7 +59,7 @@ def test_export_contents(run_app, settings):
     assert m["created_local"] in fname
     # the database inside is a complete, ordinary SQLite file
     path = settings.data_dir / "check.db"
-    path.write_bytes(z.read("shelly-monitor.db"))
+    path.write_bytes(z.read("shelly-pi.db"))
     con = sqlite3.connect(path)
     assert con.execute("SELECT COUNT(*) FROM readings").fetchone()[0] >= 300
     assert "CHF" in con.execute("SELECT v FROM meta WHERE k='tariff'").fetchone()[0]
@@ -119,18 +119,18 @@ def test_bad_archives_are_refused_and_change_nothing(run_app, settings):
     populate(h, settings)
     good = h.client.get("/api/backup").content
     z = zipfile.ZipFile(io.BytesIO(good))
-    manifest, dbfile = z.read("manifest.json"), z.read("shelly-monitor.db")
+    manifest, dbfile = z.read("manifest.json"), z.read("shelly-pi.db")
     cases = {
         "not a zip": b"hello",
         "empty zip": zip_bytes({}),
         "no database": zip_bytes({"manifest.json": manifest}),
-        "path escape": zip_bytes({"manifest.json": manifest, "shelly-monitor.db": dbfile, "../evil.txt": b"x"}),
-        "stray file": zip_bytes({"manifest.json": manifest, "shelly-monitor.db": dbfile, "notes.txt": b"x"}),
-        "bad host file name": zip_bytes({"manifest.json": manifest, "shelly-monitor.db": dbfile, "dhcp-hosts.d/..": b"x"}),
-        "wrong kind": zip_bytes({"manifest.json": b'{"kind":"other","format":1}', "shelly-monitor.db": dbfile}),
-        "newer format": zip_bytes({"manifest.json": json.dumps({**json.loads(manifest), "format": 99}).encode(), "shelly-monitor.db": dbfile}),
-        "damaged db": zip_bytes({"manifest.json": manifest, "shelly-monitor.db": dbfile[: len(dbfile) // 2] + b"\0" * 4096}),
-        "not a db": zip_bytes({"manifest.json": manifest, "shelly-monitor.db": b"not sqlite" * 100}),
+        "path escape": zip_bytes({"manifest.json": manifest, "shelly-pi.db": dbfile, "../evil.txt": b"x"}),
+        "stray file": zip_bytes({"manifest.json": manifest, "shelly-pi.db": dbfile, "notes.txt": b"x"}),
+        "bad host file name": zip_bytes({"manifest.json": manifest, "shelly-pi.db": dbfile, "dhcp-hosts.d/..": b"x"}),
+        "wrong kind": zip_bytes({"manifest.json": b'{"kind":"other","format":1}', "shelly-pi.db": dbfile}),
+        "newer format": zip_bytes({"manifest.json": json.dumps({**json.loads(manifest), "format": 99}).encode(), "shelly-pi.db": dbfile}),
+        "damaged db": zip_bytes({"manifest.json": manifest, "shelly-pi.db": dbfile[: len(dbfile) // 2] + b"\0" * 4096}),
+        "not a db": zip_bytes({"manifest.json": manifest, "shelly-pi.db": b"not sqlite" * 100}),
     }
     for label, data in cases.items():
         r = h.client.post("/api/restore", content=data, headers={"Content-Type": "application/zip"})

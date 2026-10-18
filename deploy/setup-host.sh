@@ -21,10 +21,10 @@ export LC_ALL=C
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-IMAGE="localhost/shelly-monitor:latest"
-STATE=/var/lib/shelly-monitor
-CONF=/etc/shelly-monitor
-LIBEXEC=/usr/local/libexec/shelly-monitor
+IMAGE="localhost/shelly-pi:latest"
+STATE=/var/lib/shelly-pi
+CONF=/etc/shelly-pi
+LIBEXEC=/usr/local/libexec/shelly-pi
 QUADLETS=/etc/containers/systemd
 AP_CON=shelly-ap
 
@@ -107,7 +107,7 @@ cfg_get() { # cfg_get key  -> value from the saved config.json (read inside the 
 # ---- uninstall ---------------------------------------------------------------------
 
 if [ "$UNINSTALL" -eq 1 ]; then
-  say "Removing Shelly Monitor"
+  say "Removing Shelly-Pi"
   systemctl disable --now shelly-app.service shelly-dhcp.service shelly-settime.path shelly-usb.path shelly-wifiscan.path 2>/dev/null || true
   rm -f "$QUADLETS/shelly-app.container" "$QUADLETS/shelly-dhcp.container"
   rm -f /etc/systemd/system/shelly-settime.path /etc/systemd/system/shelly-settime.service \
@@ -154,13 +154,13 @@ esac
 
 say "Container image"
 if [ "$REBUILD" -eq 1 ] || ! podman image exists "$IMAGE"; then
-  if [ "$REBUILD" -eq 0 ] && [ -f "$ROOT/shelly-monitor-image.tar" ]; then
-    note "Loading $ROOT/shelly-monitor-image.tar"
-    podman load -i "$ROOT/shelly-monitor-image.tar"
+  if [ "$REBUILD" -eq 0 ] && [ -f "$ROOT/shelly-pi-image.tar" ]; then
+    note "Loading $ROOT/shelly-pi-image.tar"
+    podman load -i "$ROOT/shelly-pi-image.tar"
   else
     note "Building the image here. This needs internet access (about 60 MB)."
     podman build -t "$IMAGE" -f "$ROOT/Containerfile" "$ROOT" \
-      || die "Build failed. No internet? Build on your PC with scripts/build-image.sh and copy shelly-monitor-image.tar into $ROOT."
+      || die "Build failed. No internet? Build on your PC with scripts/build-image.sh and copy shelly-pi-image.tar into $ROOT."
   fi
 else
   note "$IMAGE is already here (use --rebuild to rebuild it)."
@@ -271,7 +271,7 @@ if [ "$USE_RTC" = yes ]; then
   else
     if ! grep -q '^dtoverlay=i2c-rtc,ds3231' "$BOOTCFG"; then
       [ -f "$BOOTCFG.shelly-bak" ] || cp "$BOOTCFG" "$BOOTCFG.shelly-bak"
-      printf '\n# Shelly Monitor: DS3231 hardware clock\ndtparam=i2c_arm=on\ndtoverlay=i2c-rtc,ds3231\n' >> "$BOOTCFG"
+      printf '\n# Shelly-Pi: DS3231 hardware clock\ndtparam=i2c_arm=on\ndtoverlay=i2c-rtc,ds3231\n' >> "$BOOTCFG"
       note "Added the DS3231 lines to $BOOTCFG."
       NEED_REBOOT=1
     else

@@ -22,7 +22,7 @@ const SM = (() => {
   }
 
   async function api(path, opts = {}) {
-    const init = { method: opts.method || "GET", headers: { "X-Requested-With": "shelly-monitor" } };
+    const init = { method: opts.method || "GET", headers: { "X-Requested-With": "shelly-pi" } };
     if (opts.file !== undefined) {
       init.headers["Content-Type"] = opts.type || "application/octet-stream";
       init.body = opts.file; // sent as is, not wrapped in JSON

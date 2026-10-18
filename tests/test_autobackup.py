@@ -102,7 +102,7 @@ class FakePi:
             time.sleep(0.05)
 
     def backups(self):
-        folder = self.drive / "shelly-monitor-backups"
+        folder = self.drive / "shelly-pi-backups"
         return sorted(p.name for p in folder.glob("*.zip")) if folder.is_dir() else []
 
 
@@ -145,11 +145,11 @@ def test_pick_drive_run_now_and_status(run_app, pi):
     r = h.client.post("/api/autobackup/run")
     assert r.status_code == 200, r.text
     res = r.json()["result"]
-    assert res["ok"] is True and res["file"].startswith("shelly-monitor_") and res["file"].endswith(".zip")
+    assert res["ok"] is True and res["file"].startswith("shelly-pi_") and res["file"].endswith(".zip")
     assert pi.backups() == [res["file"]]
     # it is a real, complete backup, and nothing was left behind in the bridge folder
-    z = zipfile.ZipFile(pi.drive / "shelly-monitor-backups" / res["file"])
-    assert {"manifest.json", "shelly-monitor.db"} <= set(z.namelist())
+    z = zipfile.ZipFile(pi.drive / "shelly-pi-backups" / res["file"])
+    assert {"manifest.json", "shelly-pi.db"} <= set(z.namelist())
     assert not list((h.app.state.cfg.bridge_dir / "outgoing").iterdir())
     assert h.client.get("/api/autobackup").json()["last"]["file"] == res["file"]
 

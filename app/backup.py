@@ -3,11 +3,11 @@
 An archive is a zip with these members and nothing else:
 
   manifest.json          what it is, when it was made, row counts
-  shelly-monitor.db      the whole database: plugs, readings, rollups, prices
+  shelly-pi.db      the whole database: plugs, readings, rollups, prices
   config.json            the tunable settings, without the two passwords
   dhcp-hosts.d/*.conf    the address each plug is pinned to
 
-It is named shelly-monitor_yyyy-mm-dd_HH-MM-ss.zip, so a folder of backups sorts by date.
+It is named shelly-pi_yyyy-mm-dd_HH-MM-ss.zip, so a folder of backups sorts by date.
 
 Restoring replaces the database, the plugs' address reservations and the tunable settings
 (poll interval, retention and so on). It deliberately keeps this Pi's own Wi-Fi name and
@@ -33,8 +33,8 @@ from .config import Settings
 from .db import Database
 
 FORMAT = 1
-KIND = "shelly-monitor-backup"
-DB_NAME = "shelly-monitor.db"
+KIND = "shelly-pi-backup"
+DB_NAME = "shelly-pi.db"
 HOSTS_DIR = "dhcp-hosts.d"
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024
@@ -70,7 +70,7 @@ def stamp(epoch: float, tz: ZoneInfo) -> str:
 
 
 def archive_name(epoch: float, tz: ZoneInfo) -> str:
-    return f"shelly-monitor_{stamp(epoch, tz)}.zip"
+    return f"shelly-pi_{stamp(epoch, tz)}.zip"
 
 
 # ---- export ----------------------------------------------------------------------------
@@ -129,7 +129,7 @@ def read_archive(archive: Path, out: Path) -> dict[str, Any]:
     try:
         z = zipfile.ZipFile(archive)
     except (zipfile.BadZipFile, OSError):
-        raise BackupError("This isn't a backup made by Shelly Monitor. Choose a .zip it exported.") from None
+        raise BackupError("This isn't a backup made by Shelly-Pi. Choose a .zip it exported.") from None
     with z:
         infos = z.infolist()
         if len(infos) > MAX_MEMBERS or sum(i.file_size for i in infos) > MAX_UNPACKED_BYTES:
@@ -142,16 +142,16 @@ def read_archive(archive: Path, out: Path) -> dict[str, Any]:
             if not ok:
                 raise BackupError(f"The archive contains a file this program doesn't use ({n[:60]}). Nothing was changed.")
         if "manifest.json" not in names or DB_NAME not in names:
-            raise BackupError("This isn't a backup made by Shelly Monitor: the manifest or the database is missing.")
+            raise BackupError("This isn't a backup made by Shelly-Pi: the manifest or the database is missing.")
         try:
             manifest = json.loads(z.read("manifest.json").decode("utf-8"))
         except (ValueError, UnicodeDecodeError, KeyError):
             raise BackupError("The archive's manifest can't be read.") from None
         if not isinstance(manifest, dict) or manifest.get("kind") != KIND:
-            raise BackupError("This isn't a backup made by Shelly Monitor.")
+            raise BackupError("This isn't a backup made by Shelly-Pi.")
         fmt = manifest.get("format")
         if not isinstance(fmt, int) or fmt > FORMAT:
-            raise BackupError("This backup was made by a newer version of Shelly Monitor. Update this Pi first.")
+            raise BackupError("This backup was made by a newer version of Shelly-Pi. Update this Pi first.")
         if fmt < 1:
             raise BackupError("This backup's format isn't supported.")
 

@@ -179,7 +179,7 @@ def create_app(
             await stop_services(app)
             await http.aclose()
 
-    app = FastAPI(title="Shelly Monitor", version=__version__, lifespan=lifespan)
+    app = FastAPI(title="Shelly-Pi", version=__version__, lifespan=lifespan)
     app.add_middleware(RequireCustomHeader)
     app.add_middleware(HttpsRedirect, manager_getter=lambda: getattr(app.state, "https", None))
     app.add_middleware(BasicAuthMiddleware, password=cfg.password)
@@ -445,14 +445,14 @@ def create_app(
             raise HTTPException(404, "There is no certificate authority yet.")
         return Response(
             m.store.ca_pem(), media_type="application/x-x509-ca-cert",
-            headers={"Content-Disposition": f'attachment; filename="shelly-monitor-ca-{m.hostname}.crt"'},
+            headers={"Content-Disposition": f'attachment; filename="shelly-pi-ca-{m.hostname}.crt"'},
         )
 
     # ---- backup and restore ----------------------------------------------------------------------
 
     @app.get("/api/backup")
     async def export_backup(tz: str | None = None) -> FileResponse:
-        """Everything the Pi stores, as one zip named shelly-monitor_yyyy-mm-dd_HH-MM-ss.zip.
+        """Everything the Pi stores, as one zip named shelly-pi_yyyy-mm-dd_HH-MM-ss.zip.
         The time in the name is the Pi's clock in the caller's time zone (?tz=Europe/Rome)."""
         zone = backup.zone_or(tz, app.state.tariff.timezone)
         async with app.state.admin_lock:

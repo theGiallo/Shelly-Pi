@@ -78,7 +78,7 @@ def test_inject_puts_everything_where_the_pi_will_find_it(tmp_path):
     assert r.returncode == 0, r.stderr + r.stdout
     var = root / "ostree/deploy/fedora-iot/var/lib/shelly-install"
     assert (var / "project/deploy/setup-host.sh").is_file() and (var / "project/app/api.py").is_file()
-    assert (var / "project/shelly-monitor-image.tar").read_bytes() == b"fake image"
+    assert (var / "project/shelly-pi-image.tar").read_bytes() == b"fake image"
     assert not list((var / "project").rglob("__pycache__")) and not (var / "project/demo-data").exists()
     assert oct(var.stat().st_mode & 0o777) == "0o700"
     env = var / "firstboot.env"

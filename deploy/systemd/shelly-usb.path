@@ -1,8 +1,8 @@
 [Unit]
-Description=Watch for a USB drive request from the Shelly Monitor web page
+Description=Watch for a USB drive request from the Shelly-Pi web page
 
 [Path]
-PathExists=/var/lib/shelly-monitor/bridge/usb.req
+PathExists=/var/lib/shelly-pi/bridge/usb.req
 Unit=shelly-usb.service
 
 [Install]

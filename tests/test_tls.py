@@ -33,7 +33,7 @@ def test_ca_is_private_and_constrained(store):
     assert stat.S_IMODE(store.ca_key.stat().st_mode) == 0o600
     assert stat.S_IMODE(store.dir.stat().st_mode) == 0o700
     info = store.ca_info()
-    assert info["name"] == "Shelly Monitor local CA (shellypi)"
+    assert info["name"] == "Shelly-Pi local CA (shellypi)"
     assert info["permitted_dns"] == ["local", "localhost", "shellypi"]
     assert len(info["fingerprint"].split(":")) == 32
     assert info["not_after"] - info["not_before"] > 3600 * 24 * 3600

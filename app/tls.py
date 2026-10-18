@@ -161,8 +161,8 @@ class CertStore:
                 p.unlink(missing_ok=True)
             key = _key()
             name = x509.Name([
-                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Shelly Monitor"),
-                x509.NameAttribute(NameOID.COMMON_NAME, f"Shelly Monitor local CA ({host})"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Shelly-Pi"),
+                x509.NameAttribute(NameOID.COMMON_NAME, f"Shelly-Pi local CA ({host})"),
             ])
             constraints = x509.NameConstraints(
                 permitted_subtrees=[x509.DNSName("local"), x509.DNSName("localhost"), x509.DNSName(host)]

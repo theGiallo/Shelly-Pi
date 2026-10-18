@@ -8,7 +8,7 @@
 set -uo pipefail
 DIR=/var/lib/shelly-install
 exec > >(tee -a "$DIR/firstboot.log") 2>&1
-echo "== Shelly Monitor first-boot setup, $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
+echo "== Shelly-Pi first-boot setup, $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
 
 # shellcheck disable=SC1091
 . "$DIR/firstboot.env"
@@ -27,8 +27,8 @@ if [ "$RTC" = yes ]; then args+=(--rtc); else args+=(--no-rtc); fi
 
 if bash deploy/setup-host.sh "${args[@]}"; then
   touch "$DIR/done"
-  rm -f "$DIR/firstboot.env"            # the passwords stay only in /var/lib/shelly-monitor/config.json
-  ln -sfn "$DIR/project" /root/shelly-monitor
+  rm -f "$DIR/firstboot.env"            # the passwords stay only in /var/lib/shelly-pi/config.json
+  ln -sfn "$DIR/project" /root/shelly-pi
   echo "== Setup finished. Rebooting in 10 seconds."
   sleep 10
   systemctl reboot
