@@ -191,6 +191,21 @@ $SshOpts = @("-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10"
 # ---- 3. log in ------------------------------------------------------------------------------------------
 
 Say "Logging in as $User"
+# A card that was written again has a new identity. SSH refuses to talk to a Pi whose fingerprint changed, which is
+# the right default, so ask before forgetting the old one.
+$probe = & $SshExe @SshOpts -o BatchMode=yes $Target true 2>&1 | ForEach-Object { "$_" }
+if (($probe -join " ") -match "REMOTE HOST IDENTIFICATION HAS CHANGED|Host key verification failed") {
+  Warn "This PC remembers a different identity for $PiHost. That is normal if you just wrote a new SD card."
+  $forget = $true
+  if (-not $Yes) {
+    $a = Read-Host "Forget the old identity and trust the Pi that is answering now? Press Enter for yes, or type n to stop"
+    if ($a -match "^[nN]") { $forget = $false }
+  }
+  if (-not $forget) { Die "Stopped. If the Pi really was replaced, run  ssh-keygen -R $PiHost  and start again." }
+  $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+  try { & ssh-keygen -R $PiHost 2>&1 | Out-Null } finally { $ErrorActionPreference = $old }
+  Note "Forgot the old identity."
+}
 if ((Test-Ssh ($SshOpts + @("-o", "BatchMode=yes", $Target, "true"))) -ne 0) {
   Note "Your key isn't accepted yet. I'll put it on the Pi; type the password of '$User' on the Pi when asked."
   $install = "umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys"
