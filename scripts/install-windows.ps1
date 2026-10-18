@@ -175,12 +175,18 @@ function Get-FedoraImage {
   if ($sumUrl) {
     try {
       $sumText = Get-Text $sumUrl
-      $m = [regex]::Match($sumText, "SHA256 \($([regex]::Escape($name))\) = ([0-9a-fA-F]{64})")
-      if (-not $m.Success) {
-        # the checksum file may spell the name a little differently (with or without "raw-"): match on release and build
-        $m = [regex]::Match($sumText, "SHA256 \(.*?$($best.Release).*?$([regex]::Escape($best.Build))\.aarch64\.raw\.xz\) = ([0-9a-fA-F]{64})")
+      # any line that has a 64-digit hash and names this build's raw image, in either layout:
+      #   SHA256 (file) = hash      or      hash  file
+      foreach ($line in ($sumText -split "`n")) {
+        if ($line -match "raw\.xz" -and $line.Contains($best.Build) -and $line -notmatch "\.iso|\.qcow2") {
+          $h = [regex]::Match($line, "(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])")
+          if ($h.Success) { $want = $h.Value.ToLower(); break }
+        }
       }
-      if ($m.Success) { $want = $m.Groups[1].Value.ToLower() } else { Warn "Read $sumUrl but it has no line for $name." }
+      if (-not $want) {
+        Warn "Read $sumUrl but it has no line for $name. What it lists:"
+        foreach ($line in ($sumText -split "`n")) { if ($line -match "[0-9a-fA-F]{64}") { Write-Host ("      " + $line.Trim().Substring(0, [math]::Min(110, $line.Trim().Length))) } }
+      }
     } catch { Warn "Couldn't read the checksum file ($($_.Exception.Message))." }
   }
   if (-not $want -and -not $ImageUrl) { Warn "No checksum found for this image, so the download can't be verified. (looked at: $(if ($sumUrl) { $sumUrl } else { 'no checksum file found' }))" }
