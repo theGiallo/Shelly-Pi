@@ -238,6 +238,40 @@ if (-not $Yes) {
   if ($answer -match "^[nN]") { Die "Stopped. Nothing was changed on the Pi." }
 }
 
+# ---- 4b. use the whole card -----------------------------------------------------------------------------------------
+
+# The Fedora image only fills about 6 GB of the card. Grow the root partition and its file system so the
+# container image and its data have room. Best effort: if anything is unexpected it changes nothing.
+Say "Making the most of the SD card"
+$grow = @'
+src=$(findmnt -no SOURCE /sysroot 2>/dev/null || findmnt -no SOURCE / 2>/dev/null)
+src=${src%%[*}
+case "$src" in
+  /dev/mmcblk*p[0-9]*|/dev/sd*[0-9]|/dev/nvme*p[0-9]*) ;;
+  *) echo "Root is on '$src'; leaving the partitions alone."; exit 0 ;;
+esac
+name=${src#/dev/}
+disk=$(lsblk -no PKNAME "$src" | head -n 1)
+num=$(cat "/sys/class/block/$name/partition")
+fstype=$(findmnt -no FSTYPE /sysroot 2>/dev/null || findmnt -no FSTYPE / 2>/dev/null)
+dsize=$(( $(cat "/sys/class/block/$disk/size") * 512 ))
+pend=$(( ( $(cat "/sys/class/block/$name/start") + $(cat "/sys/class/block/$name/size") ) * 512 ))
+free=$(( dsize - pend ))
+if [ "$free" -lt 1073741824 ]; then echo "The root partition already fills the card."; exit 0; fi
+echo "Growing $src into the $(( free / 1048576 )) MB that follow it ..."
+echo ", +" | sfdisk --no-reread -N "$num" --force "/dev/$disk" >/dev/null 2>&1 || { echo "Couldn't change the partition table; leaving it."; exit 0; }
+partx -u "/dev/$disk" 2>/dev/null || partprobe "/dev/$disk" 2>/dev/null || true
+case "$fstype" in
+  ext4) resize2fs "$src" ;;
+  xfs) xfs_growfs /sysroot ;;
+  btrfs) btrfs filesystem resize max /sysroot ;;
+  *) echo "Unknown file system '$fstype'; the partition is bigger but the file system was not grown." ;;
+esac
+df -h /sysroot 2>/dev/null | tail -n 1
+'@
+$code = Invoke-RemoteRoot $grow
+if ($code -ne 0) { Warn "Couldn't check the card's free space (continuing). If the install later runs out of space, see the README." }
+
 # ---- 5. copy the project -------------------------------------------------------------------------------------
 
 Say "Copying the project to the Pi"
@@ -262,6 +296,18 @@ Remove-Item -Force $tmpTgz -ErrorAction SilentlyContinue
 Note "Copied to ~/Shelly-Pi on the Pi."
 
 # ---- 6. the container image -----------------------------------------------------------------------------------------
+
+function Get-ReleaseBase([string]$repo) {
+  # Download address of the newest release, pre-releases included ("releases/latest" skips those).
+  try {
+    $c = (Invoke-WebRequest -UseBasicParsing -Uri "https://api.github.com/repos/$repo/releases?per_page=10" -Headers @{ "User-Agent" = "Shelly-Pi-installer" } -ErrorAction Stop).Content
+    if ($c -is [byte[]]) { $c = [System.Text.Encoding]::UTF8.GetString($c) }
+    foreach ($r in ($c | ConvertFrom-Json)) {
+      if (-not $r.draft -and $r.tag_name) { return "https://github.com/$repo/releases/download/$($r.tag_name)" }
+    }
+  } catch { }
+  return "https://github.com/$repo/releases/latest/download"
+}
 
 function Get-File([string]$url, [string]$dest) {
   $part = "$dest.part"
@@ -330,7 +376,7 @@ if ($BuildOnPi) {
 } else {
   $cache = Join-Path $env:LOCALAPPDATA "Shelly-Pi"
   New-Item -ItemType Directory -Force -Path $cache | Out-Null
-  $base = "https://github.com/$Repo/releases/latest/download"
+  $base = Get-ReleaseBase $Repo
   $tar = Join-Path $cache "shelly-pi-image.tar"
   $sum = Join-Path $cache "shelly-pi-image.tar.sha256"
   $old = $ProgressPreference

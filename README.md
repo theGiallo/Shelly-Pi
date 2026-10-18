@@ -47,8 +47,8 @@ and Settings. If anything looks wrong on your screen, tell me what you see.
 `install.cmd` does everything from a Windows 10 or 11 PC. No WSL, no extra tools to install first.
 
 **You need:** the Raspberry Pi 4 and its power supply, a microSD card of 16 GB or more in a card reader
-plugged into the PC, an Ethernet cable from the Pi to your router, and, for the Pi's first start, a screen and
-keyboard. The PC needs internet for about 1.2 GB of downloads. The Pi itself does not.
+plugged into the PC, and an Ethernet cable from the Pi to your router. No screen or keyboard is needed. The PC
+needs internet for about 1.2 GB of downloads. The Pi itself does not.
 
 **Steps**
 
@@ -58,14 +58,21 @@ keyboard. The PC needs internet for about 1.2 GB of downloads. The Pi itself doe
 3. It downloads the newest Fedora IoT image for the Pi and checks it against Fedora's checksum. If 7-Zip isn't
    installed, it installs it with winget (or fetches the official `7zr.exe` and checks its signature).
 4. In the administrator window, pick the SD card from the list and type its number to confirm.
-   **The card is erased.** Your system disk is never offered. Writing takes 5 to 20 minutes. Windows may offer
+   **The card is erased.** Your system disk is never offered. Writing takes 5 to 20 minutes.
+5. Still in that window, the installer adds your PC's SSH key to the card's `root` account (Fedora's image has no
+   user and no password, so there would be no way in otherwise). Windows can't write the card's Linux partition,
+   so it copies that partition into a temporary file, changes it there with `debugfs` (from e2fsprogs, built and
+   tested by this project's CI and attached to each release), checks the file system and writes back only the
+   blocks that changed. It needs a few GB of free space in your temp folder for a few minutes. Windows may offer
    to format drives on the card afterwards; click Cancel, those are Linux partitions.
-5. Put the card in the Pi, connect Ethernet, a screen and a keyboard, and power it on. If Fedora's first-boot
-   setup asks you to create a user, make an administrator and remember its name and password.
-6. Back in the install window, enter that user name. The script finds the Pi, puts your SSH key on it (it makes
-   one if you have none), copies the project, downloads the container image from the newest
+6. Put the card in the Pi, connect Ethernet and power, and wait about two minutes.
+7. Press Enter in the install window. The script finds the Pi, grows the root partition to fill the card, copies
+   the project, downloads the container image from the newest
    [release](https://github.com/theGiallo/Shelly-Pi/releases) and runs `deploy/setup-host.sh` with generated
    passwords. It saves them in `shelly-pi-credentials_<date>.txt` and prints the dashboard address.
+
+If adding the key fails, the card is still good and the installer says so: connect a screen and keyboard, create
+a user when Fedora offers to, and enter its name when asked.
 
 **Options** (put them after `install.cmd`, or use the PowerShell script directly with
 `powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1`):
@@ -85,14 +92,14 @@ keyboard. The PC needs internet for about 1.2 GB of downloads. The Pi itself doe
 
 **If something goes wrong**
 
-- *The Pi does not boot* (no screen output, the green light never blinks after two minutes): the plain Fedora image
-  may need U-Boot copied onto its boot partition for the Pi 4, which Fedora's own `arm-image-installer` does and
-  this Windows script does not. Use `scripts/prepare-sd.sh` on a Linux machine instead (it uses that tool).
+- *The Pi shows nothing*: use the HDMI port next to the USB-C power socket (HDMI0). The plain Fedora IoT image does
+  boot on a Pi 4, with U-Boot already on its boot partition. A green light that never blinks usually means the
+  card isn't seated; push it in until it clicks.
 - *"Couldn't find a Fedora IoT aarch64 image"*: open <https://fedoraproject.org/iot/download>, copy the address of the aarch64
   raw image (it ends in `.aarch64.raw.xz`) and run `install.cmd -ImageUrl <address>`, or download it and use `-Image FILE`.
 - *The Pi isn't found*: look for it in your router's device list and use `-PiHost`. SSH only works after the
-  first-boot setup has finished. If the port stays closed, log in on the Pi's screen and run
-  `sudo systemctl enable --now sshd`.
+  first boot has finished (give it two minutes). The Pi's name is `localhost` until Shelly-Pi renames it, so
+  the installer usually has to ask for the address.
 - *Login fails with "host identification has changed"*: the card was written again; run `ssh-keygen -R <address>`.
 - *The image download from GitHub fails*: the script falls back to letting the Pi build it, which needs internet
   on the Pi. Or download `shelly-pi-image.tar` from the release page and put it in this folder.
@@ -371,9 +378,10 @@ and a real Plug M Gen3 (the simulated plug follows Shelly's public API docs; rea
 differ, for example in when it asks for a restart). The pages have only been rendered in jsdom,
 never in a real browser, so the layout is unseen. `TESTING.md` is the checklist for Sunday.
 
-The Windows scripts (`install.cmd`, `scripts/install-windows.ps1`, `flash-sd.ps1`, `install.ps1`) have not been run at
-all yet, on Windows or against a Pi: PowerShell wasn't available where they were written. Whether a plain Fedora IoT
-image boots on a Pi 4 without `arm-image-installer`'s extra steps is also unconfirmed.
+The Windows scripts have been run by the author on one PC, step by step, with fixes after each run. What is
+confirmed: finding and downloading the Fedora image, writing the card, and booting it on a Pi 4. CI runs the key step
+(`scripts/ext4-inject.ps1` with `debugfs`) on a Windows machine against a virtual disk. Not yet confirmed on a real
+card: adding the key, growing the root partition, and the rest of the install over SSH.
 
 The SD card script and the first-boot service have only been tried against a fake file tree: the real
 download page layout, `arm-image-installer`, the partition lookup, the SELinux labels on the copied files and
@@ -389,7 +397,7 @@ app/            the server (FastAPI) and the web pages in app/static
 deploy/         setup-host.sh, Quadlet units, clock helper, udev rule
 install.cmd      one click for Windows: Fedora IoT to the SD card, then Shelly-Pi onto the Pi
 scripts/        demo.py (try it on your PC), build-image.sh, prepare-sd.sh (Linux: prepare the SD card),
-                install-windows.ps1, flash-sd.ps1, install.ps1 (the Windows installer)
+                install-windows.ps1, flash-sd.ps1, ext4-inject.ps1, install.ps1 (the Windows installer)
 tests/          pytest suite and a simulated Shelly Gen3 plug
 Containerfile   one image for both containers
 ```

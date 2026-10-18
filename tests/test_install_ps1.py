@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PS1 = (ROOT / "scripts" / "install.ps1").read_text()
-ALL = {n: (ROOT / "scripts" / n).read_text() for n in ("install.ps1", "install-windows.ps1", "flash-sd.ps1")}
+ALL = {n: (ROOT / "scripts" / n).read_text() for n in ("install.ps1", "install-windows.ps1", "flash-sd.ps1", "ext4-inject.ps1")}
 SETUP = (ROOT / "deploy" / "setup-host.sh").read_text()
 
 
@@ -18,8 +18,10 @@ def test_here_strings_and_brackets_balance():
     for name, text in ALL.items():
         assert text.count("@'") == text.count("\n'@"), name
         assert text.count('@"') == text.count('\n"@'), name
+        # code inside single-quoted here-strings (bash, C#) is not PowerShell; CI's real PowerShell parser checks the rest too
+        code = re.sub(r"@'\n.*?\n'@", "", text, flags=re.S)
         for a, b in ("{}", "()", "[]"):
-            assert text.count(a) == text.count(b), (name, a)
+            assert code.count(a) == code.count(b), (name, a)
 
 
 def test_every_flag_it_passes_exists_in_setup_host():

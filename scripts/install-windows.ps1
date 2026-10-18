@@ -314,12 +314,24 @@ function Get-PublicKey {
   return "$newKey.pub"
 }
 
+function Get-ReleaseBase([string]$repo) {
+  # Download address of the newest release, pre-releases included ("releases/latest" skips those).
+  try {
+    $c = (Invoke-WebRequest -UseBasicParsing -Uri "https://api.github.com/repos/$repo/releases?per_page=10" -Headers @{ "User-Agent" = "Shelly-Pi-installer" } -ErrorAction Stop).Content
+    if ($c -is [byte[]]) { $c = [System.Text.Encoding]::UTF8.GetString($c) }
+    foreach ($r in ($c | ConvertFrom-Json)) {
+      if (-not $r.draft -and $r.tag_name) { return "https://github.com/$repo/releases/download/$($r.tag_name)" }
+    }
+  } catch { }
+  return "https://github.com/$repo/releases/latest/download"
+}
+
 function Get-Ext4Tools {
   # debugfs.exe and e2fsck.exe, built and tested by this project's CI and published with its releases
   $dir = Join-Path $Cache "ext4-tools"
   if ((Test-Path (Join-Path $dir "debugfs.exe")) -and (Test-Path (Join-Path $dir "e2fsck.exe"))) { return $dir }
   Say "Getting the small tool that puts your SSH key on the card"
-  $base = "https://github.com/theGiallo/Shelly-Pi/releases/latest/download"
+  $base = Get-ReleaseBase "theGiallo/Shelly-Pi"
   $zip = Join-Path $Cache "ext4-tools-windows.zip"
   try {
     $sumText = Get-Text "$base/ext4-tools-windows.zip.sha256"
