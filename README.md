@@ -63,7 +63,7 @@ needs internet for about 1.2 GB of downloads. The Pi itself does not.
    user and no password, so there would be no way in otherwise). Windows can't write the card's Linux partition,
    so it copies that partition into a temporary file, changes it there with `debugfs` (from e2fsprogs, built and
    tested by this project's CI and attached to each release), checks the file system and writes back only the
-   blocks that changed. It needs a few GB of free space in your temp folder for a few minutes. Windows may offer
+   blocks that changed. It needs about 6 GB of free space in your temp folder for a few minutes. Windows may offer
    to format drives on the card afterwards; click Cancel, those are Linux partitions.
 6. Put the card in the Pi, connect Ethernet and power, and wait about two minutes.
 7. Press Enter in the install window. The script finds the Pi, grows the root partition to fill the card, copies

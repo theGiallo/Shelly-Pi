@@ -91,76 +91,7 @@ try {
 
   # ---- the writer (compiled once, by Windows PowerShell itself) -----------------------------------------------------
   if (-not ("SdWriter" -as [type])) {
-    Add-Type -TypeDefinition @'
-using System;
-using System.IO;
-using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
-
-public static class SdWriter {
-  [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-  static extern SafeFileHandle CreateFile(string fileName, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
-
-  const int Head = 4 * 1024 * 1024;    // the partition table is written last, so Windows doesn't mount half a card
-  const int Chunk = 4 * 1024 * 1024;
-
-  static int Fill(Stream s, byte[] buf) {
-    int got = 0;
-    while (got < buf.Length) {
-      int n = s.Read(buf, got, buf.Length - got);
-      if (n <= 0) break;
-      got += n;
-    }
-    return got;
-  }
-
-  public static long Write(Stream src, string device, long diskBytes, long expected) {
-    uint GENERIC_READ_WRITE = 0xC0000000, SHARE_READ_WRITE = 3, OPEN_EXISTING = 3, WRITE_THROUGH = 0x80000000;
-    SafeFileHandle h = CreateFile(device, GENERIC_READ_WRITE, SHARE_READ_WRITE, IntPtr.Zero, OPEN_EXISTING, WRITE_THROUGH, IntPtr.Zero);
-    if (h.IsInvalid)
-      throw new IOException("Can't open " + device + " for writing (Windows error " + Marshal.GetLastWin32Error() + "). Close programs that use the card and try again.");
-    long total = 0, lastTotal = 0;
-    double speed = 0, lastSec = 0;   // speed: bytes per second, smoothed over the last half minute or so
-    System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
-    using (FileStream dst = new FileStream(h, FileAccess.ReadWrite, 1, false)) {
-      byte[] head = new byte[Head];
-      int got = Fill(src, head);
-      if (got < 1024 * 1024) throw new IOException("The image ended after " + got + " bytes. It is damaged.");
-      total = got;
-      byte[] buf = new byte[Chunk];
-      dst.Position = Head;
-      while (got == Head) {
-        int n = Fill(src, buf);
-        if (n == 0) break;
-        int w = (n + 511) / 512 * 512;
-        if (w > n) Array.Clear(buf, n, w - n);
-        if (Head + (total - Head) + w > diskBytes) throw new IOException("The image is bigger than the card.");
-        dst.Write(buf, 0, w);
-        total += n;
-        double sec = clock.Elapsed.TotalSeconds;
-        if (sec - lastSec >= 2) {
-          double inst = (total - lastTotal) / (sec - lastSec);
-          speed = speed <= 0 ? inst : speed * 0.85 + inst * 0.15;
-          lastSec = sec; lastTotal = total;
-          string eta = "";
-          if (expected > total && speed > 0) {
-            int left = (int)((expected - total) / speed);
-            eta = string.Format("  about {0}:{1:00} left", left / 60, left % 60);
-          }
-          if (expected > 0) Console.Write("\r    {0:N0} of {1:N0} MB written ({2}%)  {3:N1} MB/s{4}          ", total / 1048576, expected / 1048576, total * 100 / expected, speed / 1048576, eta);
-          else Console.Write("\r    {0:N0} MB written  {1:N1} MB/s          ", total / 1048576, speed / 1048576);
-        }
-        if (n < Chunk) break;
-      }
-      dst.Position = 0;
-      dst.Write(head, 0, Head);
-      dst.Flush(true);
-    }
-    Console.WriteLine();
-    return total;
-  }
-}
-'@
+    Add-Type -TypeDefinition ([System.IO.File]::ReadAllText((Join-Path $PSScriptRoot "sd-writer.cs")))
   }
 
   # ---- clean the disk and write -----------------------------------------------------------------------------------------
@@ -172,6 +103,23 @@ public static class SdWriter {
 
   Say "Writing the image (this takes 5 to 20 minutes; don't remove the card)"
   $device = "\\.\PhysicalDrive$n"
+  $script:keyAdded = $false
+  $hook = $null
+  if ($ToolsDir -and $PublicKey) {
+    . (Join-Path $PSScriptRoot "ext4-inject.ps1")
+    $hook = [Action[long, long]]{
+      param($off, $size)
+      Say "Letting your PC log in to the Pi (adding your SSH key to the card)"
+      try {
+        Add-RootSshKeyAt -Device $device -Offset $off -Size $size -ToolsDir $ToolsDir -PublicKeyFile $PublicKey -WorkDir $env:TEMP
+        $script:keyAdded = $true
+        Note "Done. The Pi will accept your PC's key for the 'root' account."
+      } catch {
+        Warn "Couldn't add the key: $($_.Exception.Message)"
+        Warn "The card is written and still good, but the Pi will need a user created on its own screen and keyboard."
+      }
+    }
+  }
   $proc = $null
   if ($isXz) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -185,7 +133,7 @@ public static class SdWriter {
     $source = [System.IO.File]::OpenRead($Image)
   }
   try {
-    $written = [SdWriter]::Write($source, $device, [long]$target.Size, [long]$imageBytes)
+    $written = [SdWriter]::Write($source, $device, [long]$target.Size, [long]$imageBytes, $hook)
   } finally {
     $source.Dispose()
   }
@@ -202,23 +150,6 @@ public static class SdWriter {
   $parts = @(Get-Partition -DiskNumber $n -ErrorAction SilentlyContinue)
   Note ("The card now has {0} partitions." -f $parts.Count)
 
-  $keyAdded = $false
-  if ($ToolsDir -and $PublicKey) {
-    Say "Letting your PC log in to the Pi (adding your SSH key to the card)"
-    try {
-      . (Join-Path $PSScriptRoot "ext4-inject.ps1")
-      Add-RootSshKeyToDisk -DiskNumber $n -ToolsDir $ToolsDir -PublicKeyFile $PublicKey -WorkDir $env:TEMP
-      $keyAdded = $true
-      Note "Done. The Pi will accept your PC's key for the 'root' account."
-    } catch {
-      Warn "Couldn't add the key: $($_.Exception.Message)"
-      Warn "The card is written and still good, but the Pi will need a user created on its own screen and keyboard."
-    }
-    try { Set-Disk -Number $n -IsOffline $false -ErrorAction SilentlyContinue } catch { }
-    try { Update-Disk -Number $n -ErrorAction SilentlyContinue } catch { }
-    Start-Sleep -Seconds 2
-    $parts = @(Get-Partition -DiskNumber $n -ErrorAction SilentlyContinue)
-  }
   Warn "Windows may say it must format some drives on this card. Click Cancel each time: those are Linux partitions it can't read."
   try {
     # Eject the one drive Windows can read, so everything is flushed and the card can be pulled out safely.
@@ -232,7 +163,7 @@ public static class SdWriter {
   Say "The SD card is written"
   Note "Take it out of the reader. If Windows still shows it, use 'Safely remove hardware' first."
   Read-Host "Press Enter to close this window" | Out-Null
-  if ($ToolsDir -and $PublicKey -and -not $keyAdded) { exit 2 }
+  if ($ToolsDir -and $PublicKey -and -not $script:keyAdded) { exit 2 }
   exit 0
 } catch {
   Fail $_.Exception.Message

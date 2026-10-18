@@ -137,6 +137,39 @@ public static class RawPart {
     Console.WriteLine();
   }
 
+  // writes back the 1 MiB pieces of the changed copy that differ from what is on the disk; returns how many
+  public static int WriteBackDiff(string device, long offset, string changed) {
+    const int Piece = 1024 * 1024;
+    byte[] a = new byte[Piece], b = new byte[Piece], check = new byte[Piece];
+    int changedPieces = 0;
+    using (FileStream fb = File.OpenRead(changed))
+    using (FileStream dev = Open(device, true)) {
+      long pos = 0, size = fb.Length;
+      while (pos < size) {
+        int want = (int)Math.Min(Piece, size - pos);
+        int nb = Fill(fb, b, want);
+        dev.Position = offset + pos;
+        int na = Fill(dev, a, nb);
+        if (na != nb) throw new IOException("The card stopped answering at " + (pos + na) / 1048576 + " MB.");
+        bool same = true;
+        for (int i = 0; i < nb; i++) if (a[i] != b[i]) { same = false; break; }
+        if (!same) {
+          int w = (nb + 511) / 512 * 512;
+          if (w > nb) Array.Clear(b, nb, w - nb);
+          dev.Position = offset + pos;
+          dev.Write(b, 0, w);
+          dev.Flush(true);
+          dev.Position = offset + pos;
+          Fill(dev, check, nb);
+          for (int i = 0; i < nb; i++) if (check[i] != b[i]) throw new IOException("Read-back after writing differs at " + (pos + i) + ".");
+          changedPieces++;
+        }
+        pos += nb;
+      }
+    }
+    return changedPieces;
+  }
+
   // writes back the 1 MiB pieces that differ between the original and the changed copy; returns how many
   public static int WriteBack(string device, long offset, string original, string changed) {
     const int Piece = 1024 * 1024;
@@ -172,44 +205,59 @@ public static class RawPart {
 '@
 }
 
-# Add-RootSshKeyToDisk: finds the Fedora IoT root partition on the disk, adds the key there, writes back the change.
-function Add-RootSshKeyToDisk {
-  param([Parameter(Mandatory)][int]$DiskNumber, [Parameter(Mandatory)][string]$ToolsDir, [Parameter(Mandatory)][string]$PublicKeyFile,
-        [string]$WorkDir = $env:TEMP, [long]$MinSize = 1GB)
+# Runs a native program and returns its output lines and exit code, without Windows PowerShell 5.1 turning stderr into errors.
+function Invoke-Fsck([string]$Exe, [string]$Target) {
+  $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+  try {
+    $lines = & $Exe -fn $Target 2>&1 | ForEach-Object { "$_" }
+    $code = $LASTEXITCODE
+  } finally { $ErrorActionPreference = $old }
+  return New-Object PSObject -Property @{ Lines = $lines; Code = $code }
+}
+
+# Add-RootSshKeyAt: the ext4 partition at Offset/Size of Device gets the key. It is copied to a temporary file, changed
+# there with debugfs, checked with e2fsck, and only the blocks that changed are written back.
+function Add-RootSshKeyAt {
+  param([Parameter(Mandatory)][string]$Device, [Parameter(Mandatory)][long]$Offset, [Parameter(Mandatory)][long]$Size,
+        [Parameter(Mandatory)][string]$ToolsDir, [Parameter(Mandatory)][string]$PublicKeyFile, [string]$WorkDir = $env:TEMP)
   $debugfs = Join-Path $ToolsDir "debugfs.exe"
   $e2fsck = Join-Path $ToolsDir "e2fsck.exe"
   foreach ($f in @($debugfs, $e2fsck)) { if (-not (Test-Path $f)) { throw "Missing $f" } }
-  $device = "\\.\PhysicalDrive$DiskNumber"
+  if (-not [RawPart]::HasExt4($Device, $Offset)) { throw "The biggest partition on the card isn't ext4, so it isn't the Fedora IoT root." }
+  $free = (Get-PSDrive -Name ([IO.Path]::GetPathRoot($WorkDir).Substring(0, 1))).Free
+  if ($free -lt ($Size + 300MB)) { throw ("Not enough free space in {0}: this needs about {1:N1} GB for a temporary copy of the card's root partition." -f $WorkDir, (($Size + 300MB) / 1GB)) }
+  $mod = Join-Path $WorkDir "shelly-root-changed.img"
+  try {
+    Write-Host ("    Copying the {0:N1} GB root partition to a temporary file ..." -f ($Size / 1GB))
+    [RawPart]::CopyOut($Device, $Offset, $Size, $mod)
+    $modU = $mod -replace "\\", "/"
+    $before = Invoke-Fsck $e2fsck $modU
+    Add-RootSshKey -Debugfs $debugfs -Target $modU -PublicKeyFile $PublicKeyFile
+    $after = Invoke-Fsck $e2fsck $modU
+    # only a check that gets worse than before our change stops us (the stock image may not be perfectly clean)
+    if ($after.Code -gt $before.Code) { throw ("The changed copy didn't pass the filesystem check, so nothing was written to the card: " + ($after.Lines -join " | ")) }
+    Write-Host "    Filesystem check passed. Writing the changes to the card ..."
+    $n = [RawPart]::WriteBackDiff($Device, $Offset, $mod)
+    Write-Host ("    Done: {0} MB of changes written." -f $n)
+  } finally {
+    Remove-Item -Force $mod -ErrorAction SilentlyContinue
+  }
+}
 
+# Add-RootSshKeyToDisk: for a disk that already has a partition table (used by CI on a virtual disk).
+function Add-RootSshKeyToDisk {
+  param([Parameter(Mandatory)][int]$DiskNumber, [Parameter(Mandatory)][string]$ToolsDir, [Parameter(Mandatory)][string]$PublicKeyFile,
+        [string]$WorkDir = $env:TEMP, [long]$MinSize = 1GB)
+  $device = "\\.\PhysicalDrive$DiskNumber"
   $cands = @(Get-Partition -DiskNumber $DiskNumber | Where-Object { $_.Size -gt $MinSize } | Sort-Object Size -Descending |
              Where-Object { [RawPart]::HasExt4($device, $_.Offset) })
   if ($cands.Count -eq 0) { throw "No Linux (ext4) root partition found on disk $DiskNumber." }
   $part = $cands[0]
-  $size = [long]$part.Size
-  $free = (Get-PSDrive -Name ([IO.Path]::GetPathRoot($WorkDir).Substring(0, 1))).Free
-  if ($free -lt ($size * 2 + 200MB)) { throw ("Not enough free space in {0}: this needs about {1:N1} GB for a temporary copy of the card's root partition." -f $WorkDir, (($size * 2 + 200MB) / 1GB)) }
-
-  $orig = Join-Path $WorkDir "shelly-root-original.img"
-  $mod = Join-Path $WorkDir "shelly-root-changed.img"
   $wasOnline = -not (Get-Disk -Number $DiskNumber).IsOffline
   try {
-    # Windows blocks raw writes into partitions it has mounted; an offline disk has none mounted
     if ($wasOnline) { Set-Disk -Number $DiskNumber -IsOffline $true }
-    Write-Host ("    Copying the {0:N1} GB root partition to a temporary file ..." -f ($size / 1GB))
-    [RawPart]::CopyOut($device, [long]$part.Offset, $size, $orig)
-    Copy-Item -Force $orig $mod
-    $origU = $orig -replace "\\", "/"
-    $modU = $mod -replace "\\", "/"
-    $before = & $e2fsck -fn $origU 2>&1 | ForEach-Object { "$_" }; $codeBefore = $LASTEXITCODE
-    Add-RootSshKey -Debugfs $debugfs -Target $modU -PublicKeyFile $PublicKeyFile
-    $after = & $e2fsck -fn $modU 2>&1 | ForEach-Object { "$_" }; $codeAfter = $LASTEXITCODE
-    # only a check that gets worse than before our change stops us (the stock image may not be perfectly clean)
-    if ($codeAfter -gt $codeBefore) { throw ("The changed copy didn't pass the filesystem check, so nothing was written to the card: " + ($after -join " | ")) }
-    Write-Host "    Filesystem check passed. Writing the changes to the card ..."
-    $n = [RawPart]::WriteBack($device, [long]$part.Offset, $orig, $mod)
-    Write-Host ("    Done: {0} MB of changes written." -f $n)
+    Add-RootSshKeyAt -Device $device -Offset ([long]$part.Offset) -Size ([long]$part.Size) -ToolsDir $ToolsDir -PublicKeyFile $PublicKeyFile -WorkDir $WorkDir
   } finally {
-    Remove-Item -Force $orig, $mod -ErrorAction SilentlyContinue
     if ($wasOnline) { try { Set-Disk -Number $DiskNumber -IsOffline $false } catch { } }
   }
 }
