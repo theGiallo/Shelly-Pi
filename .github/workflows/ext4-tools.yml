@@ -101,8 +101,9 @@ jobs:
           create partition primary
           "@ | Out-File -Encoding ascii "$env:RUNNER_TEMP\dp.txt"
           diskpart /s "$env:RUNNER_TEMP\dp.txt"
-          $d = Get-Disk | Where-Object { $_.Location -like "*ext4test.vhd*" -or $_.FriendlyName -like "*Virtual*" } | Select-Object -Last 1
+          $d = Get-DiskImage -ImagePath $vhd | Get-Disk
           $n = $d.Number
+          if ($d.IsSystem -or $d.IsBoot -or $n -eq 0) { throw "refusing to use disk $n: it looks like the system disk" }
           $p = Get-Partition -DiskNumber $n | Where-Object { $_.Type -ne "Reserved" } | Select-Object -First 1
           Write-Host "disk $n partition offset $($p.Offset) size $($p.Size)"
           $target = "//./PhysicalDrive${n}?offset=$($p.Offset)"
