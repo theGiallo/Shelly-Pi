@@ -252,6 +252,22 @@
       <h2 id="h-about">About</h2>
       <dl class="kv"><dt>Version</dt><dd id="version">&ndash;</dd></dl>
     </section>
+    <section class="section" id="about" aria-labelledby="h-about">
+      <h2 id="h-about">About</h2>
+      <p>Shelly-Pi <span id="ab-version"></span>, a local-only dashboard for Shelly plugs. Free software under the MIT license. <a id="ab-project" href="#" target="_blank" rel="noopener">Project page on GitHub</a> (opens on a device with internet).</p>
+      <div class="actions"><button type="button" class="btn" id="about-open">About, license and changelog</button></div>
+      <dialog id="about-dialog" aria-labelledby="h-about-d">
+        <h2 id="h-about-d">Shelly-Pi <span id="abd-version"></span></h2>
+        <p><a id="abd-project" href="#" rel="noopener" target="_blank">Project page on GitHub</a></p>
+        <h3 class="sub-h">Changelog</h3>
+        <pre class="plain" id="abd-changelog"></pre>
+        <h3 class="sub-h">License</h3>
+        <pre class="plain" id="abd-license"></pre>
+        <h3 class="sub-h">Third-party software</h3>
+        <pre class="plain" id="abd-third"></pre>
+        <form method="dialog" class="actions"><button class="btn primary">Close</button></form>
+      </dialog>
+    </section>
   </main>
 
   <script src="/static/common.js"></script>

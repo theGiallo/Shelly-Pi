@@ -31,6 +31,7 @@
     if (!sys.ap.password) { $("#ap-pass").textContent = "No password set"; $("#ap-show").hidden = true; }
 
     $("#up-version").textContent = sys.version;
+    $("#ab-version").textContent = sys.version;
     $("#qr-apwifi").src = "/api/wizard/qr.svg?kind=apwifi&t=" + Date.now();
     $("#qr-dash").src = "/api/wizard/qr.svg?kind=dashboard";
     $("#qr-login-row").hidden = !sys.auth;
@@ -333,6 +334,21 @@
       toast(err.message);
       btn.disabled = false;
     }
+  });
+
+  // ---- about --------------------------------------------------------------------------------------
+
+  $("#ab-project").href = "https://github.com/theGiallo/Shelly-Pi";
+  $("#about-open").addEventListener("click", async () => {
+    try {
+      const a = await api("/api/about");
+      $("#abd-version").textContent = a.version;
+      $("#abd-project").href = a.project;
+      $("#abd-changelog").textContent = a.changelog || "No changelog on this Pi.";
+      $("#abd-license").textContent = a.license || "See the LICENSE file in the project.";
+      $("#abd-third").textContent = a.third_party.map((t) => `${t.name}\n\n${t.license}`).join("\n\n");
+      $("#about-dialog").showModal();
+    } catch (err) { toast(err.message); }
   });
 
   // ---- updating the app ---------------------------------------------------------------------------

@@ -639,6 +639,25 @@ def create_app(
             log.info("app update of %d bytes handed to the Pi's helper", size)
             return {"ok": True, "id": rid, "bytes": size}
 
+    # ---- about ---------------------------------------------------------------------------------
+
+    @app.get("/api/about")
+    async def about() -> dict:
+        root = Path(__file__).resolve().parent.parent   # /app in the image, the checkout when developing
+
+        def read(p: Path) -> str:
+            try:
+                return p.read_text(encoding="utf-8")
+            except OSError:
+                return ""
+        return {
+            "version": __version__, "project": "https://github.com/theGiallo/Shelly-Pi",
+            "license": await asyncio.to_thread(read, root / "LICENSE"),
+            "changelog": await asyncio.to_thread(read, root / "CHANGELOG.md"),
+            "third_party": [{"name": "uPlot (charts)", "license": await asyncio.to_thread(
+                read, Path(__file__).resolve().parent / "static" / "vendor" / "uPlot.LICENSE")}],
+        }
+
     # ---- system ------------------------------------------------------------------------------
 
     @app.get("/api/system")

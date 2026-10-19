@@ -51,7 +51,9 @@ jobs:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --title "$TAG" \
-              --notes "Update from the dashboard (Settings, Update the app), QR codes for the Pi's Wi-Fi, a fixed HTTPS name, mDNS and installer fixes."
+            # The notes are this version's section of CHANGELOG.md.
+            awk -v v="${TAG#v}" '/^## /{p=($2==v)} p&&!/^## /' CHANGELOG.md > notes.md
+            [ -s notes.md ] || echo "See CHANGELOG.md." > notes.md
+            gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --title "$TAG" --notes-file notes.md
           fi
           gh release upload "$TAG" shelly-pi-image.tar shelly-pi-image.tar.sha256 --clobber

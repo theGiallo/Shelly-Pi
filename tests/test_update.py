@@ -136,3 +136,11 @@ def test_load_failure_leaves_the_old_image(tmp_path):
     res = run_update(env)
     assert res["state"] == "failed"
     assert not any(x.startswith("systemctl") for x in calls(env))
+
+
+def test_about_has_license_and_changelog(run_app):
+    h = run_app()
+    a = h.client.get("/api/about").json()
+    assert "MIT License" in a["license"]
+    assert a["changelog"].startswith("# Changelog")
+    assert a["third_party"][0]["license"]

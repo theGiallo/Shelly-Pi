@@ -20,6 +20,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY app ./app
+COPY LICENSE CHANGELOG.md ./
 COPY deploy/run-dhcp.sh /usr/local/bin/run-dhcp
 RUN chmod 0755 /usr/local/bin/run-dhcp
 

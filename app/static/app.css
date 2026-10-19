@@ -415,3 +415,6 @@ section[hidden] { display: none; }
 .how p { margin: 8px 0 4px; color: var(--muted); max-width: 70ch; }
 code { font: 13px ui-monospace, "Cascadia Mono", Menlo, monospace; background: var(--track); padding: 1px 5px; border-radius: 4px; }
 progress { width: 100%; max-width: 420px; margin-top: 10px; }
+dialog { max-width: min(720px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: inherit; padding: 20px; }
+dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+pre.plain { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 var(--font-ui); margin: 6px 0 0; }
