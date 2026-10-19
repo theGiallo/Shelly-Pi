@@ -33,6 +33,7 @@
     $("#up-version").textContent = sys.version;
     $("#qr-apwifi").src = "/api/wizard/qr.svg?kind=apwifi&t=" + Date.now();
     $("#qr-dash").src = "/api/wizard/qr.svg?kind=dashboard";
+    $("#qr-login-row").hidden = !sys.auth;
 
     const db = sys.db;
     const rows = [
@@ -60,6 +61,11 @@
       SM.showClock(sys.clock, sys.held_samples);
     } catch (e) { toast(e.message); }
   }
+
+  $("#qr-login").addEventListener("change", (e) => {
+    $("#qr-dash").src = "/api/wizard/qr.svg?kind=dashboard" + (e.target.checked ? "&login=1" : "");
+    $("#qr-login-note").hidden = !e.target.checked;
+  });
 
   $("#ap-show").addEventListener("click", (e) => {
     const p = $("#ap-pass");

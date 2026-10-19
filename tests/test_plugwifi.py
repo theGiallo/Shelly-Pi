@@ -126,3 +126,13 @@ def test_qr_for_joining_the_plug(run_app):
 
 def test_wifi_qr_text_with_password():
     assert wifi_qr_text("ShellyPi", "abc;12") == r"WIFI:T:WPA;S:ShellyPi;P:abc\;12;;"
+
+
+def test_dashboard_qr_can_carry_the_login(run_app, settings):
+    h = run_app(password="pw/1 &x")
+    auth = ("admin", "pw/1 &x")
+    plain = h.client.get("/api/wizard/qr.svg?kind=dashboard", auth=auth)
+    with_login = h.client.get("/api/wizard/qr.svg?kind=dashboard&login=1", auth=auth)
+    assert plain.status_code == with_login.status_code == 200
+    assert plain.content != with_login.content
+    assert h.client.get("/api/system", auth=auth).json()["auth"] is True

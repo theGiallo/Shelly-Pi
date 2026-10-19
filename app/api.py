@@ -13,6 +13,7 @@ import secrets
 import shutil
 import tempfile
 import time
+import urllib.parse
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Callable, Literal
@@ -26,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import __version__, backup, history, leases, tariff as tariff_mod
-from .auth import BasicAuthMiddleware, HttpsRedirect, RequireCustomHeader
+from .auth import USER as AUTH_USER, BasicAuthMiddleware, HttpsRedirect, RequireCustomHeader
 from .https_manager import HttpsManager
 from .bridge import BridgeError, HostBridge
 from .plugwifi import PlugWifi, is_shelly_ssid, wifi_qr_text
@@ -330,6 +331,7 @@ def create_app(
     @app.get("/api/wizard/qr.svg")
     def wizard_qr(
         kind: Literal["provision", "reboot", "page", "plugwifi", "apwifi", "dashboard"] = "provision", ssid: str = "",
+        login: bool = False,
     ) -> Response:
         w: Wizard = app.state.wizard
         if kind == "plugwifi":
@@ -339,7 +341,9 @@ def create_app(
         elif kind == "apwifi":
             content = wifi_qr_text(cfg.ap_ssid, cfg.ap_password)
         elif kind == "dashboard":
-            content = f"http://{cfg.ap_ip}/"
+            # With login=1 the dashboard password is inside the address, so the phone opens the page signed in.
+            creds = f"{AUTH_USER}:{urllib.parse.quote(cfg.password, safe='')}@" if login and cfg.password else ""
+            content = f"http://{creds}{cfg.ap_ip}/"
         else:
             content = {
                 "provision": w.provision_url(), "reboot": w.reboot_url(),
@@ -644,6 +648,7 @@ def create_app(
         return {
             "version": __version__, "clock": app.state.clock.status(),
             "ap": {"ssid": cfg.ap_ssid, "ip": cfg.ap_ip, "password": cfg.ap_password},
+            "auth": bool(cfg.password),
             "db": {"bytes": db.file_size(), **counts},
             "held_samples": len(mon().buffer),
             "last_maintenance": mon().last_maintenance,
