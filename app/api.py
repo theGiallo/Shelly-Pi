@@ -62,6 +62,12 @@ PAGE_HEADERS = {
 }
 
 
+class PlugNetBody(BaseModel):
+    mode: Literal["pi", "router"]
+    ssid: str = Field(default="", max_length=64)
+    password: str | None = Field(default=None, max_length=100)   # None = keep the saved one
+
+
 class SwitchBody(BaseModel):
     on: bool | None = None  # None = toggle
 
@@ -320,11 +326,54 @@ def create_app(
 
     # ---- add-plug wizard ---------------------------------------------------------------
 
+    def plug_net_state() -> dict:
+        return {
+            "mode": cfg.plug_network, "router_ssid": cfg.router_ssid,
+            "router_has_password": bool(cfg.router_password), "pi_ssid": cfg.ap_ssid,
+            "pi_wifi": os.environ.get("SM_NO_AP") != "1",   # false on a Pi without Wi-Fi
+        }
+
+    @app.get("/api/plugnet")
+    async def plugnet() -> dict:
+        return plug_net_state()
+
+    @app.put("/api/plugnet")
+    async def set_plugnet(body: PlugNetBody) -> dict:
+        """Choose which Wi-Fi the plugs join: the Pi's own, or a network of the person's router."""
+        ssid = body.ssid.strip()
+        if body.mode == "pi":
+            if not plug_net_state()["pi_wifi"]:
+                raise HTTPException(409, "This Pi has no Wi-Fi to host a network with.")
+            new = {"plug_network": "pi"}
+        else:
+            if not ssid or len(ssid.encode("utf-8")) > 32:
+                raise HTTPException(422, "Enter the router's Wi-Fi name (up to 32 characters).")
+            if body.password is None and ssid != cfg.router_ssid:
+                raise HTTPException(422, "Enter the Wi-Fi password (leave it empty if the network has none).")
+            password = cfg.router_password if body.password is None else body.password
+            if password and not 8 <= len(password) <= 63:
+                raise HTTPException(422, "A Wi-Fi password is 8 to 63 characters.")
+            new = {"plug_network": "router", "router_ssid": ssid, "router_password": password}
+        async with app.state.admin_lock:
+            def write() -> None:
+                f = cfg.data_dir / "config.json"
+                try:
+                    merged = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+                except ValueError:
+                    merged = {}
+                merged.update(new)
+                backup._write_config(cfg, merged)
+            await asyncio.to_thread(write)
+            for k, v in new.items():
+                setattr(cfg, k, v)
+        return plug_net_state()
+
     @app.get("/api/wizard/provision")
     def wizard_provision() -> dict:
         w: Wizard = app.state.wizard
         return {
-            "ssid": cfg.ap_ssid, "password": cfg.ap_password, "plug_ap_ip": cfg.plug_ap_ip,
+            "mode": cfg.plug_network, "ssid": cfg.plug_ssid, "password": cfg.plug_password,
+            "plug_ap_ip": cfg.plug_ap_ip, "can_scan_plug_wifi": plug_net_state()["pi_wifi"],
             "provision_url": w.provision_url(), "reboot_url": w.reboot_url(),
         }
 
@@ -367,6 +416,13 @@ def create_app(
     @app.get("/api/wizard/scan")
     async def wizard_scan() -> dict:
         return {"candidates": await app.state.wizard.scan()}
+
+    @app.post("/api/wizard/scan-network")
+    async def wizard_scan_network() -> dict:
+        """Try every address on the router's network (only in router mode)."""
+        if not cfg.router_mode:
+            raise HTTPException(409, "The plugs use the Pi's own Wi-Fi, so there is no router network to scan.")
+        return {"candidates": await app.state.wizard.scan_network()}
 
     @app.get("/api/wizard/probe")
     async def wizard_probe(host: str) -> dict:
@@ -667,7 +723,7 @@ def create_app(
         return {
             "version": __version__, "clock": app.state.clock.status(),
             "ap": {"ssid": cfg.ap_ssid, "ip": cfg.ap_ip, "password": cfg.ap_password},
-            "auth": bool(cfg.password),
+            "plug_network": cfg.plug_network, "auth": bool(cfg.password),
             "db": {"bytes": db.file_size(), **counts},
             "held_samples": len(mon().buffer),
             "last_maintenance": mon().last_maintenance,

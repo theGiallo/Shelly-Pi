@@ -20,7 +20,7 @@
 
   <main>
     <h1 class="page-title">Add a plug</h1>
-    <p class="lede">The plug joins the Wi-Fi network this Pi hosts. Nothing here needs internet.</p>
+    <p class="lede" id="lede">The plug joins the Wi-Fi network this Pi hosts. Nothing here needs internet.</p>
 
     <ol class="steps">
       <li class="step is-active" id="step-join">
@@ -51,8 +51,8 @@
       <li class="step is-active" id="step-1">
         <div class="step-n" aria-hidden="true">2</div>
         <div class="body">
-          <h2>Send the Pi's Wi-Fi details to the plug</h2>
-          <p>With your phone on the plug's network, scan the next code. It tells the plug to join the Wi-Fi this Pi hosts. If the phone says it has no internet, stay connected.</p>
+          <h2 id="send-title">Send the Pi's Wi-Fi details to the plug</h2>
+          <p id="send-text">With your phone on the plug's network, scan the next code. It tells the plug to join the Wi-Fi this Pi hosts. If the phone says it has no internet, stay connected.</p>
           <div class="qr-row">
             <div class="qr"><img id="qr-provision" alt="QR code that sends the Wi-Fi details to the plug" width="204" height="204"></div>
             <div class="qr-side">
@@ -76,13 +76,18 @@
           <h2>Wait for the plug to appear</h2>
           <div class="status-line" id="scan-status" role="status"><span class="spinner" aria-hidden="true"></span><span id="scan-text">Looking for new plugs on the Pi's Wi-Fi&hellip;</span></div>
           <div class="cands" id="cands"></div>
+          <div id="net-scan" hidden>
+            <p><strong>Not showing up?</strong> Some plugs don't announce themselves. The Pi can try every address on the network instead; that takes up to a minute.</p>
+            <div class="actions"><button type="button" class="btn" id="net-scan-btn">Scan the network</button></div>
+            <p class="note" id="net-scan-msg" role="status"></p>
+          </div>
           <div id="trouble" hidden>
             <p><strong>Nothing yet?</strong> Check that the plug is still plugged in and that your phone showed the plug's reply. If the plug accepted the details but didn't join, it may need a restart: while your phone is still on the plug's network, scan this code.</p>
             <div class="qr" style="width:160px;height:160px;margin-top:10px"><img id="qr-reboot" alt="QR code that restarts the plug" width="144" height="144"></div>
           </div>
           <details class="fallback">
             <summary>I know the plug's address</summary>
-            <div class="copy-row"><input id="manual-host" type="text" inputmode="url" placeholder="192.168.50.101" aria-label="Plug address" autocomplete="off"><button type="button" class="btn small" id="manual-find">Find plug</button></div>
+            <div class="copy-row"><input id="manual-host" type="text" inputmode="url" placeholder="192.168.1.101" aria-label="Plug address" autocomplete="off"><button type="button" class="btn small" id="manual-find">Find plug</button></div>
             <p class="note" id="manual-msg" style="margin-top:6px"></p>
           </details>
         </div>

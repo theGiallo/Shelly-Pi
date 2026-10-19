@@ -336,6 +336,44 @@
     }
   });
 
+  // ---- which Wi-Fi the plugs join -----------------------------------------------------------------
+
+  let plugnet = null;
+  const pnMode = () => ($("#pn-router").checked ? "router" : "pi");
+  function renderPlugnet() {
+    const p = plugnet;
+    $("#pn-pi").checked = p.mode === "pi";
+    $("#pn-router").checked = p.mode === "router";
+    $("#pn-pi").disabled = !p.pi_wifi;
+    $("#pn-pi-note").textContent = p.pi_wifi ? `(${p.pi_ssid})` : "(this Pi has no Wi-Fi)";
+    if (!$("#pn-ssid").value) $("#pn-ssid").value = p.router_ssid || "";
+    $("#pn-pass").placeholder = p.router_has_password ? "Saved. Type a new one to change it." : "Leave empty if the network has no password";
+    $("#pn-router-box").hidden = pnMode() !== "router";
+    $("#pi-wifi").hidden = p.mode !== "pi";
+  }
+  async function loadPlugnet() {
+    try { plugnet = await api("/api/plugnet"); renderPlugnet(); } catch (e) { toast(e.message); }
+  }
+  document.querySelectorAll('input[name="plugnet"]').forEach((r) =>
+    r.addEventListener("change", () => { $("#pn-router-box").hidden = pnMode() !== "router"; $("#pn-msg").textContent = ""; }));
+  $("#pn-save").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    $("#pn-msg").textContent = "";
+    try {
+      const body = { mode: pnMode(), ssid: $("#pn-ssid").value.trim() };
+      if ($("#pn-pass").value !== "" || !plugnet.router_has_password || body.ssid !== plugnet.router_ssid) body.password = $("#pn-pass").value;
+      plugnet = await api("/api/plugnet", { method: "PUT", body });
+      $("#pn-pass").value = "";
+      renderPlugnet();
+      $("#pn-msg").textContent = plugnet.mode === "router"
+        ? "Saved. New plugs will be told to join this network. Plugs you already added keep working as they are."
+        : "Saved. New plugs will join the Pi's own network.";
+    } catch (err) { $("#pn-msg").textContent = err.message; }
+    btn.disabled = false;
+  });
+  loadPlugnet();
+
   // ---- about --------------------------------------------------------------------------------------
 
   $("#ab-project").href = "https://github.com/theGiallo/Shelly-Pi";

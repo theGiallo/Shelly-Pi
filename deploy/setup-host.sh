@@ -143,8 +143,17 @@ if [ -r /etc/os-release ]; then
   esac
 fi
 [ "$(uname -m)" = "aarch64" ] || warn "This machine is $(uname -m), not aarch64 (a 64-bit Pi OS)."
-nmcli -t -f DEVICE,TYPE device | grep -q "^${IFACE}:wifi$" \
-  || die "No Wi-Fi interface called '$IFACE'. Run 'nmcli device' to see yours, then use --iface."
+# A Pi without Wi-Fi (a Pi 2, say) can't host a network for the plugs: they join the router's network instead,
+# which is chosen in Settings once the dashboard runs. There is then no access point and no DHCP server here.
+NO_WIFI=0
+if ! nmcli -t -f DEVICE,TYPE device | grep -q "^${IFACE}:wifi$"; then
+  if nmcli -t -f TYPE device | grep -q '^wifi$'; then
+    die "No Wi-Fi interface called '$IFACE'. Run 'nmcli device' to see yours, then use --iface."
+  fi
+  NO_WIFI=1
+  say "No Wi-Fi on this Pi"
+  note "The plugs will use your router's Wi-Fi: set its name and password in the dashboard's Settings."
+fi
 case "$CHANNEL" in
   1|2|3|4|5|6|7|8|9|10|11) ;;
   *) die "--channel must be between 1 and 11" ;;
@@ -181,26 +190,32 @@ fi
 # Preset by scripts/prepare-sd.sh for the unattended first boot.
 [ -n "$AP_PASS" ] || AP_PASS="${SHELLY_AP_PASSWORD:-}"
 [ -n "$ADMIN_PASS" ] || ADMIN_PASS="${SHELLY_ADMIN_PASSWORD:-}"
-if [ -z "$SSID" ]; then SSID="$(ask "Name for the plugs' Wi-Fi network" "ShellyPi")"; fi
-[ -n "$SSID" ] || SSID="ShellyPi"
-[ "${#SSID}" -le 32 ] || die "The Wi-Fi name can be at most 32 characters."
-if [ -z "$AP_PASS" ]; then
-  AP_PASS="$(ask_secret "Password for the plugs' Wi-Fi, 8 to 63 characters (Enter to generate one)")"
-  if [ -z "$AP_PASS" ]; then AP_PASS="$(gen_secret 10)"; GENERATED+=("Plugs' Wi-Fi password: $AP_PASS"); fi
+if [ "$NO_WIFI" -eq 0 ]; then
+  if [ -z "$SSID" ]; then SSID="$(ask "Name for the plugs' Wi-Fi network" "ShellyPi")"; fi
+  [ -n "$SSID" ] || SSID="ShellyPi"
+  [ "${#SSID}" -le 32 ] || die "The Wi-Fi name can be at most 32 characters."
+  if [ -z "$AP_PASS" ]; then
+    AP_PASS="$(ask_secret "Password for the plugs' Wi-Fi, 8 to 63 characters (Enter to generate one)")"
+    if [ -z "$AP_PASS" ]; then AP_PASS="$(gen_secret 10)"; GENERATED+=("Plugs' Wi-Fi password: $AP_PASS"); fi
+  fi
+  if [ "${#AP_PASS}" -lt 8 ] || [ "${#AP_PASS}" -gt 63 ]; then die "The Wi-Fi password must be 8 to 63 characters."; fi
 fi
-if [ "${#AP_PASS}" -lt 8 ] || [ "${#AP_PASS}" -gt 63 ]; then die "The Wi-Fi password must be 8 to 63 characters."; fi
 if [ -z "$ADMIN_PASS" ]; then
   ADMIN_PASS="$(ask_secret "Password for the dashboard, user 'admin' (Enter to generate one)")"
   if [ -z "$ADMIN_PASS" ]; then ADMIN_PASS="$(gen_secret 8)"; GENERATED+=("Dashboard password (user admin): $ADMIN_PASS"); fi
 fi
 
 NET="${AP_IP%.*}"
+CFG_ARGS=(--ap-ip "$AP_IP")
+[ -z "$SSID" ] || CFG_ARGS+=(--ap-ssid "$SSID")
+[ "$NO_WIFI" -eq 0 ] || CFG_ARGS+=(--plug-network router)
 SM_PASSWORD="$ADMIN_PASS" SM_AP_PASSWORD="$AP_PASS" \
   podman run --rm -e SM_PASSWORD -e SM_AP_PASSWORD -v "$STATE:/data:z" "$IMAGE" \
-  python -m app.cli init-config --data-dir /data --ap-ssid "$SSID" --ap-ip "$AP_IP"
+  python -m app.cli init-config --data-dir /data "${CFG_ARGS[@]}"
 chmod 600 "$STATE/config.json"
 
-cat > "$CONF/env" <<EOF
+if [ "$NO_WIFI" -eq 0 ]; then
+  cat > "$CONF/env" <<EOF
 # Written by setup-host.sh. Secrets live in $STATE/config.json instead.
 SM_AP_IFACE=$IFACE
 SM_AP_IP=$AP_IP
@@ -208,10 +223,21 @@ SM_DHCP_START=$NET.100
 SM_DHCP_END=$NET.199
 SM_PORT=80
 EOF
+else
+  cat > "$CONF/env" <<EOF
+# Written by setup-host.sh. This Pi has no Wi-Fi, so it hosts no network for the plugs.
+SM_NO_AP=1
+SM_AP_IP=$AP_IP
+SM_PORT=80
+EOF
+fi
 chmod 644 "$CONF/env"
 
 # ---- 3. access point ------------------------------------------------------------------------------
 
+if [ "$NO_WIFI" -eq 1 ]; then
+  nmcli connection delete "$AP_CON" >/dev/null 2>&1 || true
+else
 say "Wi-Fi access point '$SSID' on $IFACE (channel $CHANNEL, 2.4 GHz)"
 nmcli radio wifi on || true
 command -v rfkill >/dev/null 2>&1 && rfkill unblock wifi || true
@@ -230,6 +256,7 @@ if nmcli connection up "$AP_CON" >/dev/null 2>&1; then
   note "Access point is up at $AP_IP."
 else
   warn "The access point didn't start. Check: journalctl -u NetworkManager -n 50 (the Pi 4's Wi-Fi needs its firmware, which Fedora ships)."
+fi
 fi
 
 # ---- 4. firewall -------------------------------------------------------------------------------------
@@ -304,9 +331,15 @@ systemctl enable --now shelly-update.path >/dev/null 2>&1 || warn "Couldn't enab
 
 say "Starting the services"
 install -d -m 0755 "$QUADLETS"
-install -m 0644 "$HERE/quadlet/shelly-app.container" "$HERE/quadlet/shelly-dhcp.container" "$QUADLETS/"
+install -m 0644 "$HERE/quadlet/shelly-app.container" "$QUADLETS/"
+if [ "$NO_WIFI" -eq 0 ]; then
+  install -m 0644 "$HERE/quadlet/shelly-dhcp.container" "$QUADLETS/"
+else
+  systemctl stop shelly-dhcp.service >/dev/null 2>&1 || true
+  rm -f "$QUADLETS/shelly-dhcp.container"
+fi
 systemctl daemon-reload
-systemctl restart shelly-dhcp.service shelly-app.service
+if [ "$NO_WIFI" -eq 0 ]; then systemctl restart shelly-dhcp.service shelly-app.service; else systemctl restart shelly-app.service; fi
 
 CURRENT_HOST="$(hostnamectl --static 2>/dev/null || hostname)"
 if [ "$CURRENT_HOST" != "$NEW_HOSTNAME" ]; then
@@ -347,7 +380,7 @@ done
 echo
 if [ "$UP" -eq 1 ]; then note "The dashboard is running."; else warn "The dashboard didn't answer. Check: journalctl -u shelly-app -n 50"; fi
 sleep 2
-if ! systemctl is-active --quiet shelly-dhcp.service; then
+if [ "$NO_WIFI" -eq 0 ] && ! systemctl is-active --quiet shelly-dhcp.service; then
   warn "The DHCP server isn't running. Check: journalctl -u shelly-dhcp -n 50"
 fi
 
@@ -357,7 +390,11 @@ ETH_IP="$(ip -4 -o addr show scope global 2>/dev/null | awk -v i="$IFACE" '$2!=i
 ETH_SHOW="${ETH_IP:-ETHERNET-ADDRESS-OF-THE-PI}"
 say "Done"
 note "Dashboard from your PC:   http://$ETH_SHOW/   (or http://$NEW_HOSTNAME.local/)"
-note "From the plugs' Wi-Fi:    http://$AP_IP/"
+if [ "$NO_WIFI" -eq 0 ]; then
+  note "From the plugs' Wi-Fi:    http://$AP_IP/"
+else
+  note "Next:                     open Settings, 'Wi-Fi for the plugs', and enter your router's Wi-Fi name and password"
+fi
 note "HTTPS (optional):         https://$NEW_HOSTNAME.local/  after installing the Pi's certificate, see Settings"
 note "User name: admin"
 if [ "${#GENERATED[@]}" -gt 0 ]; then

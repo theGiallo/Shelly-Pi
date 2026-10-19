@@ -7,6 +7,8 @@
   let scanStarted = Date.now();
   let manual = null; // a candidate found by address
   let lastScan = [];
+  let netFound = []; // candidates found by scanning the router's network
+  let prov = null;   // what /api/wizard/provision said: which Wi-Fi the plugs join
 
   const setStep = (n, state) => {
     const s = $(`#step-${n}`);
@@ -81,6 +83,12 @@
 
   let wifiWake = null;   // lets the loop skip its wait, e.g. when the tab comes back to the front
   async function wifiLoop() {
+    await provReady;
+    if (prov && !prov.can_scan_plug_wifi) {
+      wifiError = "This Pi has no Wi-Fi to look for the plug with. Join the plug's own network by hand.";
+      renderJoin();
+      return;
+    }
     let first = true;
     while (phase === "scan") {
       // Always ask once at the start. After that, skip rounds while the tab is hidden, so the Pi
@@ -104,6 +112,13 @@
   async function loadProvision() {
     try {
       const p = await api("/api/wizard/provision");
+      prov = p;
+      if (p.mode === "router") {
+        $("#lede").textContent = "The plug joins your router's Wi-Fi, and the Pi finds it there. Nothing here needs internet.";
+        $("#send-title").textContent = "Send your router's Wi-Fi details to the plug";
+        $("#send-text").textContent = "With your phone on the plug's network, scan the next code. It tells the plug to join your router's Wi-Fi. If the phone says it has no internet, stay connected.";
+        if (!p.ssid) toast("Set the router's Wi-Fi name and password in Settings first.");
+      }
       $("#ssid-name").textContent = p.ssid;
       $("#fb-ssid").value = p.ssid;
       $("#fb-pass").value = p.password;
@@ -140,6 +155,7 @@
 
   function renderCandidates() {
     const list = [...lastScan];
+    for (const c of netFound) if (!list.some((x) => x.mac === c.mac)) list.push(c);
     if (manual && !list.some((c) => c.mac === manual.mac)) list.push(manual);
     const box = $("#cands");
     box.replaceChildren(...list.map((c) => {
@@ -157,9 +173,10 @@
     const found = list.length > 0;
     $("#scan-text").textContent = found
       ? "Found a plug. Pick it to continue."
-      : "Looking for new plugs on the Pi's Wi-Fi…";
+      : (prov && prov.mode === "router" ? "Looking for new plugs on the network…" : "Looking for new plugs on the Pi's Wi-Fi…");
     $("#scan-status .spinner").hidden = found;
     $("#trouble").hidden = found || Date.now() - scanStarted < 45000;
+    $("#net-scan").hidden = !(prov && prov.mode === "router") || found || Date.now() - scanStarted < 10000;
   }
 
   async function scanLoop() {
@@ -171,6 +188,18 @@
       await new Promise((r) => setTimeout(r, 2500));
     }
   }
+
+  $("#net-scan-btn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget, msg = $("#net-scan-msg");
+    btn.disabled = true;
+    msg.textContent = "Trying every address on the network. This takes up to a minute…";
+    try {
+      netFound = (await api("/api/wizard/scan-network", { method: "POST" })).candidates;
+      msg.textContent = netFound.length ? "Found a plug." : "Nothing answered. Check the plug joined your router's Wi-Fi, or enter its address below.";
+      renderCandidates();
+    } catch (err) { msg.textContent = err.message; }
+    btn.disabled = false;
+  });
 
   $("#manual-find").addEventListener("click", async () => {
     const host = $("#manual-host").value.trim();
@@ -282,7 +311,7 @@
   // ---- go ---------------------------------------------------------------------------------
 
   initChrome("add");
-  loadProvision();
+  const provReady = loadProvision();
   scanLoop();
   wifiLoop();
 })();

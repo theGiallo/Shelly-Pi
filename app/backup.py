@@ -40,7 +40,7 @@ MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024
 MAX_MEMBERS = 1000
 REQUIRED_TABLES = ("meta", "devices", "readings", "rollup_1m", "rollup_15m")
-SECRET_KEYS = ("password", "ap_password")
+SECRET_KEYS = ("password", "ap_password", "router_password")
 # Settings a restore may change. Anything not listed here stays as it is on this Pi.
 TUNABLE = (
     "poll_interval", "poll_timeout", "flush_interval", "maintenance_interval",

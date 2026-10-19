@@ -24,7 +24,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import leases
+from . import lan, leases
 from .clock import ClockGuard
 from .config import Settings
 from .db import Database
@@ -91,8 +91,8 @@ class Wizard:
     # ---- URLs shown as QR codes -------------------------------------------
 
     def provision_url(self) -> str:
-        cfg = {"sta": {"ssid": self.cfg.ap_ssid, "pass": self.cfg.ap_password, "enable": True}}
-        if not self.cfg.ap_password:
+        cfg = {"sta": {"ssid": self.cfg.plug_ssid, "pass": self.cfg.plug_password, "enable": True}}
+        if not self.cfg.plug_password:
             cfg["sta"].pop("pass")
         q = urllib.parse.quote(json.dumps(cfg, separators=(",", ":")), safe="")
         return f"http://{self.cfg.plug_ap_ip}/rpc/WiFi.SetConfig?config={q}"
@@ -133,7 +133,41 @@ class Wizard:
             return None
         return self._candidate(info, lease.ip, lease.hostname, known)
 
+    def _own_nets(self) -> list[str]:
+        """The Pi's own Wi-Fi network, which is left out when looking on the router's network."""
+        return [f"{self.cfg.ap_ip}/24"] if self.cfg.ap_ip else []
+
+    async def _probe_ips(self, ips: list[str], known: dict[str, Any], timeout: float) -> list[dict]:
+        sem = asyncio.Semaphore(64)
+
+        async def one(ip: str) -> dict | None:
+            if self._not_shelly.get(("", ip), 0) > time.monotonic():
+                return None
+            async with sem:
+                try:
+                    info = await self.shelly.device_info(ip, timeout=timeout)
+                except ShellyError:
+                    self._not_shelly[("", ip)] = time.monotonic() + 60
+                    return None
+            return self._candidate(info, ip, "", known)
+        return [r for r in await asyncio.gather(*(one(ip) for ip in ips)) if r]
+
+    async def scan_network(self) -> list[dict]:
+        """Try every address on the router's network. Slower than mDNS, but finds plugs that don't announce themselves."""
+        known = {d["mac"]: d for d in await asyncio.to_thread(self.db.list_devices)}
+        addrs = lan.scan_addresses(await asyncio.to_thread(lan.local_networks), self._own_nets())
+        if not addrs:
+            return []
+        # A new scan forgets which addresses answered "not a Shelly" a moment ago.
+        for k in [k for k in self._not_shelly if k[0] == ""]:
+            self._not_shelly.pop(k, None)
+        return await self._probe_ips(addrs, known, timeout=0.8)
+
     async def scan(self) -> list[dict]:
+        if self.cfg.router_mode:
+            known = {d["mac"]: d for d in await asyncio.to_thread(self.db.list_devices)}
+            ips = await lan.browse(timeout=2.5, exclude_nets=self._own_nets())
+            return await self._probe_ips(ips, known, timeout=1.5)
         found = await asyncio.to_thread(leases.read_leases, self.cfg.leases_file)
         known = {d["mac"]: d for d in await asyncio.to_thread(self.db.list_devices)}
         now = time.monotonic()
@@ -204,7 +238,11 @@ class Wizard:
 
         # 2. reserve --------------------------------------------------------
         self._set(job, "reserve", "running")
-        if leases.is_plain_ip(host) and self.in_ap_subnet(host):
+        if self.cfg.router_mode:
+            self._set(job, "reserve", "warn",
+                      "Your router chooses this plug's address. Reserve it in the router so it never changes; "
+                      "if it does change, the Pi looks for the plug by name.")
+        elif leases.is_plain_ip(host) and self.in_ap_subnet(host):
             await asyncio.to_thread(leases.write_reservation, self.cfg.hosts_dir, mac, host, name)
             self._set(job, "reserve", "ok", f"Pinned to {host}")
         else:

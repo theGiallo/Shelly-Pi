@@ -32,6 +32,11 @@ class Settings:
     # Auth: single shared password (HTTP Basic, user "admin"). Empty = no auth.
     password: str = ""
 
+    # Which Wi-Fi the plugs join: "pi" = the network this Pi hosts, "router" = a network of your own router.
+    plug_network: str = "pi"
+    router_ssid: str = ""
+    router_password: str = ""
+
     # The Wi-Fi network the Pi hosts for the plugs.
     ap_ssid: str = "ShellyPi"
     ap_password: str = ""
@@ -62,6 +67,19 @@ class Settings:
     @property
     def hosts_dir(self) -> Path:
         return self.data_dir / "dhcp-hosts.d"
+
+    @property
+    def router_mode(self) -> bool:
+        return self.plug_network == "router"
+
+    @property
+    def plug_ssid(self) -> str:
+        """The Wi-Fi name the plugs are told to join."""
+        return self.router_ssid if self.router_mode else self.ap_ssid
+
+    @property
+    def plug_password(self) -> str:
+        return self.router_password if self.router_mode else self.ap_password
 
     @property
     def bridge_dir(self) -> Path:

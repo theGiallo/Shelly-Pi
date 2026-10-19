@@ -91,6 +91,18 @@
 
     <section class="section" aria-labelledby="h-wifi">
       <h2 id="h-wifi">Wi-Fi for the plugs</h2>
+      <div class="field">
+        <label><input type="radio" name="plugnet" value="pi" id="pn-pi"> The Pi's own Wi-Fi network <span class="muted" id="pn-pi-note"></span></label>
+        <label><input type="radio" name="plugnet" value="router" id="pn-router"> A Wi-Fi network of your router</label>
+      </div>
+      <div id="pn-router-box" hidden>
+        <div class="field"><label for="pn-ssid">Router Wi-Fi name</label><input id="pn-ssid" type="text" maxlength="32" autocomplete="off"></div>
+        <div class="field"><label for="pn-pass">Router Wi-Fi password</label><input id="pn-pass" type="password" autocomplete="new-password" placeholder="Leave empty if the network has no password"></div>
+        <p class="note">The plugs join this network, so the Pi has to be on it too: connect the Pi to the router with a cable. It finds the plugs by their names, so nothing here needs internet. In your router, reserve each plug's address so it never changes.</p>
+      </div>
+      <div class="actions"><button type="button" class="btn primary" id="pn-save">Save</button></div>
+      <p class="note" id="pn-msg" role="status"></p>
+      <div id="pi-wifi">
       <dl class="kv">
         <dt>Network name</dt><dd id="ap-ssid">&ndash;</dd>
         <dt>Password</dt><dd><span id="ap-pass">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span> <button type="button" class="btn ghost small" id="ap-show">Show</button></dd>
@@ -108,6 +120,7 @@
         <label for="qr-login">Put the dashboard password in the second code, so the phone opens the dashboard already signed in</label>
       </div>
       <p class="note" id="qr-login-note" hidden>Anyone who scans or photographs that code can sign in, and the password stays in the phone's browser history. Leave this off in a shared room.</p>
+      </div>
     </section>
 
     <section class="section" aria-labelledby="h-data">

@@ -57,7 +57,7 @@ def test_status_is_read_from_the_helper_file(run_app, settings):
 # ---- the root script, with pretend podman / systemctl / curl ---------------------------------
 
 def make_env(tmp_path: Path, load_output: str = "Loaded image: localhost/shelly-pi:latest",
-             healthy_after_restart: int = 1, load_ok: bool = True) -> dict:
+             healthy_after_restart: int = 1, load_ok: bool = True, dhcp_unit: bool = True) -> dict:
     bridge, bin_ = tmp_path / "bridge", tmp_path / "bin"
     bridge.mkdir()
     bin_.mkdir()
@@ -76,6 +76,8 @@ def make_env(tmp_path: Path, load_output: str = "Loaded image: localhost/shelly-
     (bin_ / "systemctl").write_text(
         "#!/bin/sh\n"
         f'echo "systemctl $*" >> {log}\n'
+        f'[ "$1" = cat ] && exit {0 if dhcp_unit else 1}\n'
+        '[ "$1" = restart ] || exit 0\n'
         f'n=$(cat {restarts} 2>/dev/null || echo 0); echo $((n+1)) > {restarts}\n'
         f'if [ $((n+1)) -ge {healthy_after_restart} ]; then touch {healthy}; else rm -f {healthy}; fi\n')
     (bin_ / "curl").write_text(f"#!/bin/sh\n[ -f {healthy} ]\n")
@@ -118,7 +120,7 @@ def test_a_file_that_is_not_our_image_is_refused(tmp_path):
     env = make_env(tmp_path, load_output="Loaded image: docker.io/library/alpine:latest")
     res = run_update(env)
     assert res["state"] == "failed" and "isn't a Shelly-Pi image" in res["message"]
-    assert not any(x.startswith("systemctl") for x in calls(env))
+    assert not any(x.startswith("systemctl restart") for x in calls(env))
     assert "podman tag localhost/shelly-pi:previous localhost/shelly-pi:latest" in calls(env)
 
 
@@ -135,7 +137,7 @@ def test_load_failure_leaves_the_old_image(tmp_path):
     env = make_env(tmp_path, load_ok=False)
     res = run_update(env)
     assert res["state"] == "failed"
-    assert not any(x.startswith("systemctl") for x in calls(env))
+    assert not any(x.startswith("systemctl restart") for x in calls(env))
 
 
 def test_about_has_license_and_changelog(run_app):
@@ -144,3 +146,9 @@ def test_about_has_license_and_changelog(run_app):
     assert "MIT License" in a["license"]
     assert a["changelog"].startswith("# Changelog")
     assert a["third_party"][0]["license"]
+
+
+def test_a_pi_without_wifi_has_no_dhcp_unit_to_restart(tmp_path):
+    env = make_env(tmp_path, dhcp_unit=False)
+    assert run_update(env)["state"] == "done"
+    assert "systemctl restart shelly-app.service" in calls(env)

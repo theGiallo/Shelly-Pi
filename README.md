@@ -275,6 +275,28 @@ Things to know:
   being served. The port is `https_port` in `config.json` (443; 0 turns the feature off).
 - Not tested against real browsers and phones yet, only against OpenSSL, Python and Node.
 
+### Plugs on your router's Wi-Fi instead
+
+By default the plugs join the Wi-Fi the Pi hosts. If you would rather they join a network of your router (for
+example because the Pi has no Wi-Fi, or the router already covers the house), open Settings, **Wi-Fi for the
+plugs**, choose the router option and enter the router's Wi-Fi name and password. The Pi must be on that network
+too, by cable. The Add plug page then sends the router's details to the new plug, and the Pi finds the plug there:
+
+- First by mDNS, which Shelly plugs use to announce themselves. This needs nothing from the router.
+- If nothing shows up after about ten seconds, a button scans every address on the network (up to a /22, a
+  minute at most). You can also type a plug's address.
+- A router may give the plug a different address one day. The Pi then looks for the plug by its name
+  (`<id>.local`) and carries on. Reserving the plug's address in the router avoids the question.
+
+Plugs you already added keep working, and you can switch back any time. The Pi's own Wi-Fi keeps running while
+the router option is chosen. The router's Wi-Fi password is kept on the Pi in `config.json` and is not part of
+backups.
+
+**Pis without Wi-Fi.** The setup script notices a Pi with no Wi-Fi, skips the access point and the DHCP
+server, and starts in router mode; you then enter the router's details in Settings. Fedora IoT needs a 64-bit
+Pi: according to Fedora's Raspberry Pi page the 3 series and the Compute Module 3 work, and the Pi 2 only if it
+is the 64-bit version 1.2; the Pi Zero and Pi 1 do not. Only the Pi 4 has been tried so far.
+
 ### Backup and restore
 
 Settings, **Backup and restore**, downloads one zip named like `shelly-pi_2026-10-17_03-53-00.zip`

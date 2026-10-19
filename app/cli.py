@@ -28,6 +28,8 @@ def init_config(args: argparse.Namespace) -> int:
             "ap_password": os.environ.get("SM_AP_PASSWORD", cfg.get("ap_password", "")),
         }
     )
+    if args.plug_network:
+        cfg["plug_network"] = args.plug_network
     tmp = cfg_file.with_suffix(".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -42,8 +44,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     ic = sub.add_parser("init-config")
     ic.add_argument("--data-dir", default="/data")
-    ic.add_argument("--ap-ssid", required=True)
+    ic.add_argument("--ap-ssid", default="ShellyPi")
     ic.add_argument("--ap-ip", default="192.168.50.1")
+    ic.add_argument("--plug-network", choices=("pi", "router"), default=None,
+                    help="which Wi-Fi the plugs join (router = a network of your own router, no Wi-Fi hosted by the Pi)")
     ic.set_defaults(fn=init_config)
     args = p.parse_args(argv)
     return args.fn(args)

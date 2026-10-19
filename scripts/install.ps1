@@ -242,21 +242,24 @@ function Invoke-RemoteRoot([string]$script) {
   $run = "sudo -S -p '' bash ~/.shelly-pi-run.sh; rc=`$?; rm -f ~/.shelly-pi-run.sh; exit `$rc"
   return (Invoke-WithInput $SshExe ($SshOpts + @($Target, $run)) ($SudoPassword + "`n"))
 }
-$remoteOs = & $SshExe @SshOpts $Target "uname -m; . /etc/os-release 2>/dev/null; echo `$PRETTY_NAME"
+$noWifi = $false
+$remoteOs = & $SshExe @SshOpts $Target "uname -m; . /etc/os-release 2>/dev/null; echo `$PRETTY_NAME; if ls /sys/class/net/*/wireless >/dev/null 2>&1; then echo wifi; else echo nowifi; fi"
 if ($LASTEXITCODE -eq 0) {
-  Note ("The Pi says: " + (($remoteOs | ForEach-Object { "$_" }) -join ", "))
-  if (($remoteOs | Select-Object -First 1) -ne "aarch64") { Warn "This doesn't look like a 64-bit (aarch64) system." }
+  $lines = @($remoteOs | ForEach-Object { "$_" })
+  Note ("The Pi says: " + (($lines | Select-Object -First 2) -join ", "))
+  if ($lines[0] -ne "aarch64") { Warn "This doesn't look like a 64-bit (aarch64) system." }
+  if ($lines.Count -ge 3 -and $lines[2] -eq "nowifi") { $noWifi = $true; Note "This Pi has no Wi-Fi, so the plugs will join your router's Wi-Fi (you set it in the dashboard afterwards)." }
 }
 
 # ---- 4. settings ------------------------------------------------------------------------------------------
 
 $generated = @()
-if (-not $ApPassword)    { $ApPassword = New-Secret 10;    $generated += "Plugs' Wi-Fi password: $ApPassword" }
+if (-not $ApPassword -and -not $noWifi) { $ApPassword = New-Secret 10;    $generated += "Plugs' Wi-Fi password: $ApPassword" }
 if (-not $AdminPassword) { $AdminPassword = New-Secret 8;  $generated += "Dashboard password (user admin): $AdminPassword" }
 
 Say "Ready to install"
 Note "On:               $Target"
-Note "Wi-Fi for plugs:  $Ssid (channel $Channel, country $Country)"
+if ($noWifi) { Note "Wi-Fi for plugs:  your router's (set in the dashboard afterwards)" } else { Note "Wi-Fi for plugs:  $Ssid (channel $Channel, country $Country)" }
 Note "Host name:        $Hostname"
 if ($NoRtc) { Note "Hardware clock:   none" } else { Note "Hardware clock:   DS3231 module (use -NoRtc if you have none)" }
 if (-not $Yes) {
@@ -458,8 +461,8 @@ $lines = @(
   "",
   "Dashboard:                http://$PiHost/   (user: admin)",
   "Dashboard password:       $AdminPassword",
-  "Plugs' Wi-Fi name:        $Ssid",
-  "Plugs' Wi-Fi password:    $ApPassword",
+  $(if ($noWifi) { "Plugs' Wi-Fi:             your router's, set in the dashboard under Settings" } else { "Plugs' Wi-Fi name:        $Ssid" }),
+  $(if ($noWifi) { "" } else { "Plugs' Wi-Fi password:    $ApPassword" }),
   "",
   "Keep this file private."
 )

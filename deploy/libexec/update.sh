@@ -57,7 +57,11 @@ PORT=$([ -r "$ENVFILE" ] && sed -n 's/^SM_PORT=//p' "$ENVFILE" | tail -n 1 | tr 
 [ -n "$PORT" ] || PORT=80
 
 restart_and_wait() {
-  systemctl restart shelly-dhcp.service shelly-app.service
+  # A Pi without Wi-Fi has no DHCP unit.
+  units=shelly-app.service
+  if systemctl cat shelly-dhcp.service >/dev/null 2>&1; then units="shelly-dhcp.service shelly-app.service"; fi
+  # shellcheck disable=SC2086  # a list of unit names
+  systemctl restart $units
   n=0
   while [ "$n" -lt "$WAIT" ]; do
     if curl -fsS -o /dev/null "http://127.0.0.1:$PORT/healthz" 2>/dev/null; then return 0; fi
@@ -68,7 +72,7 @@ restart_and_wait() {
 
 state restarting "Starting the new version."
 if restart_and_wait; then
-  state done "The new version is running."
+  state "done" "The new version is running."
   exit 0
 fi
 

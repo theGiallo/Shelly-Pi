@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from . import leases, rollup
+from . import lan, leases, rollup
 from .clock import ClockGuard
 from .config import Settings
 from .db import Database
@@ -205,11 +205,28 @@ class Monitor:
         dev = self.devices.get(dev_id)
         if not dev or not leases.is_plain_ip(dev["ip"]):
             return
-        ip = await asyncio.to_thread(leases.find_ip, self.settings.leases_file, dev["mac"])
+        if self.settings.router_mode:
+            ip = await self._find_on_router_network(dev)
+        else:
+            ip = await asyncio.to_thread(leases.find_ip, self.settings.leases_file, dev["mac"])
         if ip and ip != dev["ip"]:
             log.info("device %s moved %s -> %s", dev_id, dev["ip"], ip)
             await asyncio.to_thread(self.db.update_device, dev_id, ip=ip)
             dev["ip"] = ip
+
+    async def _find_on_router_network(self, dev: dict) -> str | None:
+        """Ask for the plug by its name ('<id>.local') and check the answer really is that plug."""
+        if not dev.get("shelly_id"):
+            return None
+        own = [f"{self.settings.ap_ip}/24"] if self.settings.ap_ip else []
+        ip = await lan.resolve(dev["shelly_id"], exclude_nets=own)
+        if not ip:
+            return None
+        try:
+            info = await self.shelly.device_info(ip, timeout=2)
+        except ShellyError:
+            return None
+        return ip if leases.normalize_mac(info.get("mac")) == dev["mac"] else None
 
     async def switch(self, dev_id: int, on: bool | None) -> Live:
         dev = self.devices[dev_id]
