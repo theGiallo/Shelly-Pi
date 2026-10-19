@@ -153,15 +153,16 @@ esac
 # ---- 1. image ------------------------------------------------------------------------------
 
 say "Container image"
-if [ "$REBUILD" -eq 1 ] || ! podman image exists "$IMAGE"; then
-  if [ "$REBUILD" -eq 0 ] && [ -f "$ROOT/shelly-pi-image.tar" ]; then
-    note "Loading $ROOT/shelly-pi-image.tar"
-    podman load -i "$ROOT/shelly-pi-image.tar"
-  else
-    note "Building the image here. This needs internet access (about 60 MB)."
-    podman build -t "$IMAGE" -f "$ROOT/Containerfile" "$ROOT" \
-      || die "Build failed. No internet? Build on your PC with scripts/build-image.sh and copy shelly-pi-image.tar into $ROOT."
-  fi
+if [ "$REBUILD" -eq 0 ] && [ -f "$ROOT/shelly-pi-image.tar" ]; then
+  # An image that came with the installer is the one to run, even if an older one is already here.
+  note "Loading $ROOT/shelly-pi-image.tar"
+  podman image exists "$IMAGE" && podman tag "$IMAGE" "${IMAGE%:*}:previous" || true
+  podman load -i "$ROOT/shelly-pi-image.tar" || die "Couldn't load the image file."
+  rm -f "$ROOT/shelly-pi-image.tar"
+elif [ "$REBUILD" -eq 1 ] || ! podman image exists "$IMAGE"; then
+  note "Building the image here. This needs internet access (about 60 MB)."
+  podman build -t "$IMAGE" -f "$ROOT/Containerfile" "$ROOT" \
+    || die "Build failed. No internet? Build on your PC with scripts/build-image.sh and copy shelly-pi-image.tar into $ROOT."
 else
   note "$IMAGE is already here (use --rebuild to rebuild it)."
 fi
