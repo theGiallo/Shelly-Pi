@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.7
 
 - The update file is now compressed (`shelly-pi-image_v<version>.tar.gz`, about a third of the size). The Update page unpacks it in your browser and sends the plain image to the Pi, and the Windows installer unpacks it on your PC, so the Pi never has to. A plain `.tar` still works.
 
