@@ -85,7 +85,7 @@ a user when Fedora offers to, and enter its name when asked.
 | `-PiHost 192.168.1.50` | The Pi's address, if it can't be found by name. |
 | `-User name` | The Pi user (default: the name you type at the prompt, or `root`). |
 | `-Ssid`, `-ApPassword`, `-AdminPassword` | The plugs' Wi-Fi name and password, the dashboard password. |
-| `-NoRtc` | No DS3231 clock module is connected. |
+| `-NoRtc` | Leave out the DS3231 clock support. Not needed: without a module it does nothing, and the Pi finds a module by itself when you add one later. |
 | `-BuildOnPi` | Let the Pi build the container image (needs internet on the Pi). |
 
 `Get-Help .\scripts\install-windows.ps1 -Full` and `Get-Help .\scripts\install.ps1 -Full` list everything.

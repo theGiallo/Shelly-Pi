@@ -34,7 +34,7 @@ COUNTRY=IT
 IFACE=wlan0
 AP_IP=192.168.50.1
 NEW_HOSTNAME=shellypi
-USE_RTC=ask
+USE_RTC=yes   # switched on whether or not a module is connected: it is found by itself at boot
 REBUILD=0
 NEW_PASSWORDS=0
 ASSUME_YES=0
@@ -305,7 +305,7 @@ if [ "$USE_RTC" = yes ]; then
     if ! grep -q '^dtoverlay=i2c-rtc,ds3231' "$BOOTCFG"; then
       [ -f "$BOOTCFG.shelly-bak" ] || cp "$BOOTCFG" "$BOOTCFG.shelly-bak"
       printf '\n# Shelly-Pi: DS3231 hardware clock\ndtparam=i2c_arm=on\ndtoverlay=i2c-rtc,ds3231\n' >> "$BOOTCFG"
-      note "Added the DS3231 lines to $BOOTCFG."
+      note "Added the DS3231 lines to $BOOTCFG (they do no harm when no clock module is connected)."
       NEED_REBOOT=1
     else
       note "$BOOTCFG already has the DS3231 lines."
@@ -319,8 +319,11 @@ if [ "$USE_RTC" = yes ]; then
   if [ -e /dev/rtc0 ]; then
     note "Hardware clock found: $(cat /sys/class/rtc/rtc0/name 2>/dev/null || echo rtc0)"
   else
-    note "No hardware clock visible yet. That's expected until after the reboot."
-    NEED_REBOOT=1
+    if [ "$NEED_REBOOT" -eq 1 ]; then
+      note "No hardware clock visible yet. That's expected until after the reboot."
+    else
+      note "No hardware clock found. If you connect a DS3231 module (with the Pi powered off), it is found by itself at the next start."
+    fi
   fi
 fi
 systemctl daemon-reload
@@ -407,8 +410,8 @@ if [ "${#GENERATED[@]}" -gt 0 ]; then
 fi
 if [ "$NEED_REBOOT" -eq 1 ]; then
   echo
-  note "Reboot now to switch on the hardware clock:  sudo systemctl reboot"
-  note "Afterwards open Settings in the dashboard and press 'Set the Pi's clock'."
+  note "Reboot now to switch on the hardware clock support:  sudo systemctl reboot"
+  note "With a DS3231 module connected, open Settings afterwards and press 'Set the Pi's clock'."
 fi
 if [ "${#WARNINGS[@]}" -gt 0 ]; then
   echo

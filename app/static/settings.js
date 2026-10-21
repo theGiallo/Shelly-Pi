@@ -24,6 +24,9 @@
       $("#held").textContent = String(sys.held_samples);
     }
     renderClock();
+    $("#hw-clock").textContent = sys.hw_clock && sys.hw_clock.present
+      ? `Found (${sys.hw_clock.name}). The Pi keeps the time through power cuts.`
+      : "None found. Connect a DS3231 module with the Pi powered off; it is found by itself at the next start. If it still isn't, run the installer again so the Pi switches the module's support on.";
 
     $("#ap-ssid").textContent = sys.ap.ssid;
     $("#ap-ip").textContent = `http://${sys.ap.ip}`;

@@ -261,7 +261,7 @@ Say "Ready to install"
 Note "On:               $Target"
 if ($noWifi) { Note "Wi-Fi for plugs:  your router's (set in the dashboard afterwards)" } else { Note "Wi-Fi for plugs:  $Ssid (channel $Channel, country $Country)" }
 Note "Host name:        $Hostname"
-if ($NoRtc) { Note "Hardware clock:   none" } else { Note "Hardware clock:   DS3231 module (use -NoRtc if you have none)" }
+if ($NoRtc) { Note "Hardware clock:   none" } else { Note "Hardware clock:   support for a DS3231 module (found by itself; -NoRtc leaves it out)" }
 if (-not $Yes) {
   $answer = Read-Host "Continue? (Y/n)"
   if ($answer -match "^[nN]") { Die "Stopped. Nothing was changed on the Pi." }

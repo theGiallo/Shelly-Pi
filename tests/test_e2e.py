@@ -201,6 +201,8 @@ def test_untrusted_clock_holds_samples_until_time_is_set(run_app, plugs):
     time.sleep(1.5)                                    # several flush intervals
     assert h.app.state.db.query("SELECT COUNT(*) FROM readings")[0][0] == 0   # nothing written with a bad clock
     assert h.client.get("/api/system").json()["held_samples"] >= 6
+    hw = h.client.get("/api/system").json()["hw_clock"]
+    assert set(hw) == {"present", "name"} and isinstance(hw["present"], bool)
 
     # stand-in for the host's shelly-settime.path unit
     stop = threading.Event()

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The hardware clock is found by itself: the installer always switches on support for a DS3231 module, and Settings shows a **Hardware clock** row saying whether the Pi sees one. No on/off switch needed; plug the module in with the Pi powered off.
 - Power: the confirmation now appears right under the buttons, and the page tells you when the Pi's helper isn't installed and nothing was done (instead of saying it is shutting down). An old request can no longer fire later by surprise.
 - The update file you download is now named with the version, like `shelly-pi-image_v0.1.6.tar`. The Update page and the Windows installer find it by that name. The plain `shelly-pi-image.tar` stays on the release for now, because the Update page of version 0.1.5 and earlier looks for it.
 

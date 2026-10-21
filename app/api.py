@@ -748,12 +748,20 @@ def create_app(
 
     # ---- system ------------------------------------------------------------------------------
 
+    def hw_clock() -> dict:
+        """Is a hardware clock (the DS3231 module) there? The kernel lists it as rtc0 once it has found one."""
+        name = Path("/sys/class/rtc/rtc0/name")
+        try:
+            return {"present": True, "name": name.read_text().strip().split(" ")[0]}
+        except OSError:
+            return {"present": False, "name": ""}
+
     @app.get("/api/system")
     async def system() -> dict:
         db: Database = app.state.db
         counts = await asyncio.to_thread(db.counts)
         return {
-            "version": __version__, "clock": app.state.clock.status(),
+            "version": __version__, "clock": app.state.clock.status(), "hw_clock": hw_clock(),
             "ap": {"ssid": cfg.ap_ssid, "ip": cfg.ap_ip, "password": cfg.ap_password},
             "plug_network": cfg.plug_network, "auth": bool(cfg.password),
             "db": {"bytes": db.file_size(), **counts},
