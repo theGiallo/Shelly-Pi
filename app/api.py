@@ -68,6 +68,11 @@ class PlugNetBody(BaseModel):
     password: str | None = Field(default=None, max_length=100)   # None = keep the saved one
 
 
+class PowerBody(BaseModel):
+    action: Literal["poweroff", "reboot"]
+    confirm: bool = False
+
+
 class SwitchBody(BaseModel):
     on: bool | None = None  # None = toggle
 
@@ -694,6 +699,24 @@ def create_app(
             os.replace(tmp, req)
             log.info("app update of %d bytes handed to the Pi's helper", size)
             return {"ok": True, "id": rid, "bytes": size}
+
+    # ---- shutting down ---------------------------------------------------------------------------
+
+    @app.post("/api/power")
+    async def power(body: PowerBody) -> dict:
+        """Ask the Pi's helper to shut down or restart it (after a few seconds, so this answer gets out)."""
+        if not body.confirm:
+            raise HTTPException(422, "Confirm that you want to " + ("shut the Pi down." if body.action == "poweroff" else "restart the Pi."))
+        st = await asyncio.to_thread(update_status)
+        res = cfg.bridge_dir / "update.res.json"
+        if st and st.get("state") in ("loading", "restarting") and res.exists() and time.time() - res.stat().st_mtime < 900:
+            raise HTTPException(409, "An update is being installed. Wait until it has finished.")
+        cfg.bridge_dir.mkdir(parents=True, exist_ok=True)
+        tmp = cfg.bridge_dir / ".power.tmp"
+        tmp.write_text(f"{secrets.token_hex(6)} {body.action}\n")
+        os.replace(tmp, cfg.bridge_dir / "power.req")
+        log.info("the Pi is going to %s on request", body.action)
+        return {"ok": True, "action": body.action}
 
     # ---- about ---------------------------------------------------------------------------------
 

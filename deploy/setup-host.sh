@@ -280,6 +280,8 @@ install -m 0755 "$HERE/libexec/usb.sh" "$LIBEXEC/usb.sh"
 install -m 0644 "$HERE/systemd/shelly-usb.path" "$HERE/systemd/shelly-usb.service" /etc/systemd/system/
 install -m 0755 "$HERE/libexec/wifiscan.sh" "$LIBEXEC/wifiscan.sh"
 install -m 0644 "$HERE/systemd/shelly-wifiscan.path" "$HERE/systemd/shelly-wifiscan.service" /etc/systemd/system/
+install -m 0755 "$HERE/libexec/power.sh" "$LIBEXEC/power.sh"
+install -m 0644 "$HERE/systemd/shelly-power.path" "$HERE/systemd/shelly-power.service" /etc/systemd/system/
 install -m 0755 "$HERE/libexec/update.sh" "$LIBEXEC/update.sh"
 install -m 0644 "$HERE/systemd/shelly-update.path" "$HERE/systemd/shelly-update.service" /etc/systemd/system/
 command -v iw >/dev/null 2>&1 || warn "The 'iw' tool isn't installed, so the Add plug page will scan with nmcli, which may not work while the Pi hosts its network."
@@ -326,6 +328,7 @@ systemctl enable --now shelly-settime.path >/dev/null 2>&1 || warn "Couldn't ena
 systemctl enable --now shelly-usb.path >/dev/null 2>&1 || warn "Couldn't enable shelly-usb.path"
 systemctl enable --now shelly-wifiscan.path >/dev/null 2>&1 || warn "Couldn't enable shelly-wifiscan.path"
 systemctl enable --now shelly-update.path >/dev/null 2>&1 || warn "Couldn't enable shelly-update.path"
+systemctl enable --now shelly-power.path >/dev/null 2>&1 || warn "Couldn't enable shelly-power.path"
 
 # ---- 6. containers --------------------------------------------------------------------------------------------
 

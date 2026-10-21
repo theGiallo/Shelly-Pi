@@ -1,0 +1,6 @@
+[Unit]
+Description=Shut down or restart the Pi on request from the Shelly-Pi web page
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/shelly-pi/power.sh

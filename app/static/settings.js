@@ -374,6 +374,34 @@
   });
   loadPlugnet();
 
+  // ---- power --------------------------------------------------------------------------------------
+
+  let pwAction = null;
+  function askPower(action) {
+    pwAction = action;
+    const off = action === "poweroff";
+    $("#h-pw-d").textContent = off ? "Shut down the Pi?" : "Restart the Pi?";
+    $("#pw-ask").textContent = off
+      ? "The dashboard stops until someone plugs the Pi back in or presses its power button. No readings are taken while it is off."
+      : "The dashboard is gone for a minute or two, then comes back by itself. No readings are taken meanwhile.";
+    $("#pw-go").textContent = off ? "Shut down" : "Restart";
+    $("#pw-dialog").showModal();
+  }
+  $("#pw-off").addEventListener("click", () => askPower("poweroff"));
+  $("#pw-reboot").addEventListener("click", () => askPower("reboot"));
+  $("#pw-cancel").addEventListener("click", () => $("#pw-dialog").close());
+  $("#pw-go").addEventListener("click", async () => {
+    const off = pwAction === "poweroff";
+    $("#pw-dialog").close();
+    try {
+      await api("/api/power", { method: "POST", body: { action: pwAction, confirm: true } });
+      $("#pw-off").disabled = $("#pw-reboot").disabled = true;
+      $("#pw-msg").textContent = off
+        ? "Shutting down. Wait about 20 seconds, until the green light on the Pi stops blinking, then it is safe to unplug."
+        : "Restarting. This page comes back when the Pi is up again; reload it in a minute or two.";
+    } catch (err) { $("#pw-msg").textContent = err.message; toast(err.message); }
+  });
+
   // ---- about --------------------------------------------------------------------------------------
 
   $("#ab-project").href = "https://github.com/theGiallo/Shelly-Pi";

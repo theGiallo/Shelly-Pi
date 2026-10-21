@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Settings: **Power**, with buttons to shut down or restart the Pi, each asking for confirmation.
 - Settings: the plugs can join a Wi-Fi network of your router instead of the Pi's own. The Add plug page finds them by mDNS, with a button that scans the network and the option to type an address.
 - Pis without Wi-Fi: the setup script skips the access point and the DHCP server and starts in router mode.
 

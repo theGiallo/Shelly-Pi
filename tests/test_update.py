@@ -152,3 +152,50 @@ def test_a_pi_without_wifi_has_no_dhcp_unit_to_restart(tmp_path):
     env = make_env(tmp_path, dhcp_unit=False)
     assert run_update(env)["state"] == "done"
     assert "systemctl restart shelly-app.service" in calls(env)
+
+
+# ---- shutting down ---------------------------------------------------------------------------
+
+def test_power_needs_confirmation_and_queues_the_request(run_app, settings):
+    h = run_app()
+    assert h.client.post("/api/power", json={"action": "poweroff"}).status_code == 422
+    assert h.client.post("/api/power", json={"action": "format", "confirm": True}).status_code == 422
+    r = h.client.post("/api/power", json={"action": "poweroff", "confirm": True})
+    assert r.status_code == 200
+    assert (settings.data_dir / "bridge" / "power.req").read_text().split()[1] == "poweroff"
+
+
+def test_power_is_refused_during_an_update(run_app, settings):
+    h = run_app()
+    bridge = settings.data_dir / "bridge"
+    bridge.mkdir(parents=True, exist_ok=True)
+    (bridge / "update.res.json").write_text(json.dumps({"id": "x", "state": "loading", "message": ""}))
+    assert h.client.post("/api/power", json={"action": "reboot", "confirm": True}).status_code == 409
+
+
+POWER = Path(__file__).resolve().parent.parent / "deploy" / "libexec" / "power.sh"
+
+
+def run_power(tmp_path: Path, line: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+    bridge, bin_ = tmp_path / "bridge", tmp_path / "bin"
+    bridge.mkdir()
+    bin_.mkdir()
+    log = tmp_path / "calls.log"
+    (bin_ / "systemctl").write_text(f'#!/bin/sh\necho "systemctl $*" >> {log}\n')
+    (bin_ / "systemctl").chmod(0o755)
+    (bridge / "power.req").write_text(line + "\n")
+    p = subprocess.run(["sh", str(POWER)], capture_output=True, text=True, env={
+        **os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "SHELLY_BRIDGE": str(bridge), "SHELLY_POWER_DELAY": "0"})
+    assert not (bridge / "power.req").exists()
+    return p, (log.read_text().splitlines() if log.exists() else [])
+
+
+def test_power_script_runs_only_the_two_known_actions(tmp_path):
+    p, calls_ = run_power(tmp_path, "abc poweroff")
+    assert p.returncode == 0 and calls_ == ["systemctl poweroff"]
+    (tmp_path / "b").mkdir()
+    p, calls_ = run_power(tmp_path / "b", "abc reboot")
+    assert calls_ == ["systemctl reboot"]
+    (tmp_path / "c").mkdir()
+    p, calls_ = run_power(tmp_path / "c", "abc halt; rm -rf /")
+    assert p.returncode == 1 and calls_ == []

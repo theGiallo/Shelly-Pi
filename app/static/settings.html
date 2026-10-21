@@ -192,6 +192,24 @@
       <p class="note" id="bk-result" role="status"></p>
     </section>
 
+    <section class="section" id="power" aria-labelledby="h-power">
+      <h2 id="h-power">Power</h2>
+      <p>Shut the Pi down before unplugging it or adding hardware, so the SD card and the readings are saved properly. Readings are not taken while it is off.</p>
+      <div class="actions">
+        <button type="button" class="btn danger" id="pw-off">Shut down the Pi</button>
+        <button type="button" class="btn" id="pw-reboot">Restart the Pi</button>
+      </div>
+      <p class="note" id="pw-msg" role="status"></p>
+      <dialog id="pw-dialog" aria-labelledby="h-pw-d">
+        <h2 id="h-pw-d">Shut down the Pi?</h2>
+        <p id="pw-ask"></p>
+        <div class="actions">
+          <button type="button" class="btn" id="pw-cancel">Cancel</button>
+          <button type="button" class="btn danger" id="pw-go">Shut down</button>
+        </div>
+      </dialog>
+    </section>
+
     <section class="section" id="update" aria-labelledby="h-update">
       <h2 id="h-update">Update the app</h2>
       <p>Running version <strong id="up-version">&ndash;</strong>. The Pi has no internet, so this device does the downloading: look for a new version, save the file it offers, then send that file to the Pi here. Your data is kept. If the new version doesn't start, the Pi goes back to the old one by itself.</p>

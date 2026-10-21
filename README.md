@@ -297,6 +297,12 @@ server, and starts in router mode; you then enter the router's details in Settin
 Pi: according to Fedora's Raspberry Pi page the 3 series and the Compute Module 3 work, and the Pi 2 only if it
 is the 64-bit version 1.2; the Pi Zero and Pi 1 do not. Only the Pi 4 has been tried so far.
 
+### Shutting the Pi down
+
+Settings, **Power**: "Shut down the Pi" and "Restart the Pi", each asking for confirmation first. Shut down
+before unplugging the Pi or adding hardware such as the clock module; the green light stops blinking after
+about 20 seconds, and then it is safe to unplug. (Same as `sudo systemctl poweroff` over SSH.)
+
 ### Backup and restore
 
 Settings, **Backup and restore**, downloads one zip named like `shelly-pi_2026-10-17_03-53-00.zip`
