@@ -26,7 +26,7 @@
 .PARAMETER Ssid         Name of the Wi-Fi network the Pi creates for the plugs. Default: ShellyPi
 .PARAMETER ApPassword   Password for that network (8-63 characters). Default: generated.
 .PARAMETER AdminPassword Password for the dashboard (user admin). Default: generated.
-.PARAMETER ImageFile    A shelly-pi-image.tar you already have.
+.PARAMETER ImageFile    A shelly-pi-image.tar (or the smaller .tar.gz from the release page) you already have.
 .PARAMETER Repo         GitHub repository to download the image from. Default: theGiallo/Shelly-Pi
 .PARAMETER Channel      Wi-Fi channel 1-11. Default: 6
 .PARAMETER Country      Two-letter country code for Wi-Fi rules. Default: IT
@@ -331,6 +331,15 @@ Note "Copied to ~/Shelly-Pi on the Pi."
 
 # ---- 6. the container image -----------------------------------------------------------------------------------------
 
+function Expand-Gz([string]$src, [string]$dest) {
+  $in = New-Object System.IO.FileStream($src, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
+  try {
+    $gz = New-Object System.IO.Compression.GZipStream($in, [System.IO.Compression.CompressionMode]::Decompress)
+    $out = [System.IO.File]::Create($dest)
+    try { $gz.CopyTo($out) } finally { $out.Close(); $gz.Close() }
+  } finally { $in.Close() }
+}
+
 function Get-ReleaseImage([string]$repo) {
   # Addresses of the image and its checksum in the newest release, pre-releases included ("releases/latest" skips
   # those). The file is named with the version (shelly-pi-image_v0.1.6.tar); releases up to 0.1.5 call it shelly-pi-image.tar.
@@ -339,7 +348,9 @@ function Get-ReleaseImage([string]$repo) {
     if ($c -is [byte[]]) { $c = [System.Text.Encoding]::UTF8.GetString($c) }
     foreach ($r in ($c | ConvertFrom-Json)) {
       if ($r.draft -or -not $r.tag_name) { continue }
-      $tars = @($r.assets | Where-Object { $_.name -match '^shelly-pi-image(_v[0-9][0-9.]*)?\.tar$' } | Sort-Object { $_.name.Length } -Descending)
+      # Newest releases have a compressed .tar.gz (a third of the size); it is unpacked here, on the PC.
+      $tars = @($r.assets | Where-Object { $_.name -match '^shelly-pi-image_v[0-9][0-9.]*\.tar\.gz$' })
+      if ($tars.Count -eq 0) { $tars = @($r.assets | Where-Object { $_.name -match '^shelly-pi-image(_v[0-9][0-9.]*)?\.tar$' } | Sort-Object { $_.name.Length } -Descending) }
       if ($tars.Count -eq 0) { continue }
       $sum = @($r.assets | Where-Object { $_.name -eq ($tars[0].name + ".sha256") })
       if ($sum.Count -eq 0) { continue }
@@ -411,6 +422,12 @@ if ($BuildOnPi) {
 } elseif ($ImageFile) {
   if (-not (Test-Path $ImageFile)) { Die "Can't find $ImageFile." }
   $image = (Resolve-Path $ImageFile).Path
+  if ($image -like "*.gz") {
+    $un = Join-Path ([System.IO.Path]::GetTempPath()) "shelly-pi-image.tar"
+    Note "Unpacking $ImageFile ..."
+    Expand-Gz $image $un
+    $image = $un
+  }
 } elseif (Test-Path (Join-Path $Root "shelly-pi-image.tar")) {
   $image = Join-Path $Root "shelly-pi-image.tar"
   Note "Using the shelly-pi-image.tar in this folder."
@@ -423,7 +440,7 @@ if ($BuildOnPi) {
   $old = $ProgressPreference
   try {
     $ProgressPreference = "SilentlyContinue"   # the progress bar makes downloads in Windows PowerShell very slow
-    Note "Downloading the image from the newest release of $Repo (about 180 MB) ..."
+    Note "Downloading the image from the newest release of $Repo ..."
     Invoke-WebRequest -UseBasicParsing -Uri $rel.Sum -OutFile $sum -ErrorAction Stop
     $want = ((Get-Content -Raw $sum).Trim() -split "\s+")[0].ToLower()
     $have = ""
@@ -436,6 +453,11 @@ if ($BuildOnPi) {
       if ($want -ne $have) { throw "the download is damaged (checksum differs)" }
     }
     $image = $tar
+    if ($tar -like "*.gz") {
+      $image = $tar.Substring(0, $tar.Length - 3)
+      Note "Unpacking ..."
+      Expand-Gz $tar $image
+    }
     Note "Downloaded and checked."
   } catch {
     Warn "Couldn't get the image from GitHub: $($_.Exception.Message)"

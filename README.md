@@ -102,7 +102,7 @@ a user when Fedora offers to, and enter its name when asked.
   the installer usually has to ask for the address.
 - *Login fails with "host identification has changed"*: the card was written again; run `ssh-keygen -R <address>`.
 - *The image download from GitHub fails*: the script falls back to letting the Pi build it, which needs internet
-  on the Pi. Or download `shelly-pi-image.tar` from the release page and put it in this folder.
+  on the Pi. Or download the image from the release page and give it to the installer with `-ImageFile` (the `.tar.gz` works as it is).
 
 These scripts were written without access to Windows or a Pi, so expect rough edges the first time; the
 checks that can run elsewhere (script syntax, the settings they pass to `setup-host.sh`) are in the tests.
@@ -237,8 +237,9 @@ Containers and your data live outside the OS image, so OS updates don't touch th
 
 **Updating the app from the dashboard.** Settings, **Update the app**. The Pi has no internet, so a device that
 does have some does the downloading: "Look for a new version" asks GitHub which release is newest, "Download
-the update" saves `shelly-pi-image_v<version>.tar` (about 190 MB) on that device, and you pick that file and send it to the
-Pi. The Pi checks the file against the release's SHA-256 checksum, loads it and restarts the app; your data is
+the update" saves `shelly-pi-image_v<version>.tar.gz` (about 60 MB) on that device, and you pick that file; the
+page unpacks it there (the Pi is slow at that, a LAN is not) and sends the plain image to the Pi. The Pi checks it
+against the release's SHA-256 checksum, loads it and restarts the app; your data is
 kept. If the new version doesn't answer within 90 seconds, the previous image is put back. (The page asks
 GitHub's API from your browser, which is why the page's security policy allows `api.github.com`.) The page can
 only offer an update that was published as a GitHub release, and tells a newer release from the running one

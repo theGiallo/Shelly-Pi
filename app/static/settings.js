@@ -426,15 +426,18 @@
   // ---- updating the app ---------------------------------------------------------------------------
 
   const REPO = "theGiallo/Shelly-Pi";
-  // shelly-pi-image_v0.1.6.tar; releases up to 0.1.5 call it shelly-pi-image.tar
-  const isImage = (a) => /^shelly-pi-image(_v[0-9][0-9.]*)?\.tar$/.test(a.name);
-  let release = null; // { tag, size, sha256, url }
+  // Newer releases: shelly-pi-image_v0.1.7.tar.gz (about a third of the size; this page unpacks it before sending).
+  // Older ones: shelly-pi-image_v0.1.6.tar, or just shelly-pi-image.tar.
+  const isPacked = (a) => /^shelly-pi-image_v[0-9][0-9.]*\.tar\.gz$/.test(a.name);
+  const isImage = (a) => isPacked(a) || /^shelly-pi-image(_v[0-9][0-9.]*)?\.tar$/.test(a.name);
+  const UNPACKED_SUM = /Unpacked image SHA-256:\s*([0-9a-f]{64})/i;
+  let release = null; // { tag, size, sha256 (of the .tar), packedSha256 (of the .tar.gz, if packed), packed, url }
   const upFile = $("#up-file"), upSha = $("#up-sha"), upSend = $("#up-send");
   const normVersion = (v) => String(v || "").trim().replace(/^v/i, "");
   const upReady = () => { upSend.disabled = !(upFile.files[0] && /^[0-9a-f]{64}$/.test(upSha.value.trim().toLowerCase())); };
   upFile.addEventListener("change", () => {
     const f = upFile.files[0];
-    $("#up-result").textContent = f && release && f.size !== release.size
+    $("#up-result").textContent = f && release && release.packed && /\.gz$/i.test(f.name) && f.size !== release.size
       ? `This file is ${fmt.bytes(f.size)} but the release's is ${fmt.bytes(release.size)}. The download may be incomplete.` : "";
     upReady();
   });
@@ -452,8 +455,13 @@
       const list = await res.json();
       const rel = list.find((r) => !r.draft && (r.assets || []).some(isImage));
       if (!rel) throw new Error("No release with an app image was found.");
-      const a = rel.assets.filter(isImage).sort((x, y) => y.name.length - x.name.length)[0];   // the one with the version in its name
-      release = { tag: rel.tag_name, size: a.size, sha256: String(a.digest || "").replace(/^sha256:/, ""), url: a.browser_download_url };
+      const unpackedSum = UNPACKED_SUM.exec(rel.body || "");
+      const packed = unpackedSum && rel.assets.find(isPacked);
+      const a = packed || rel.assets.filter((x) => isImage(x) && !isPacked(x)).sort((x, y) => y.name.length - x.name.length)[0];
+      if (!a) throw new Error("No release with an app image was found.");
+      const digest = String(a.digest || "").replace(/^sha256:/, "");
+      release = { tag: rel.tag_name, size: a.size, packed: !!packed, packedSha256: packed ? digest : "",
+        sha256: packed ? unpackedSum[1].toLowerCase() : digest, url: a.browser_download_url };
       const same = normVersion(rel.tag_name) === normVersion(sys && sys.version);
       $("#up-found").textContent = same
         ? `You have the newest version (${rel.tag_name}). You can still install it again.`
@@ -467,6 +475,29 @@
       $("#up-offer").hidden = false;
     } finally { btn.disabled = false; }
   });
+
+  // The release's .tar.gz is a third of the size to download; the Pi is slow at unpacking, so this device does it.
+  async function isGzip(file) {
+    const b = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+    return b[0] === 0x1f && b[1] === 0x8b;
+  }
+
+  async function unpack(file) {
+    if (!window.DecompressionStream) {
+      throw new Error("This browser can't unpack the file. Use a recent Firefox, Chrome or Safari, or pick the plain .tar.");
+    }
+    $("#up-result").textContent = "Unpacking the file on this device…";
+    if (release && release.packedSha256 && file.size === release.size && window.crypto && crypto.subtle) {
+      const sum = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())))
+        .map((x) => x.toString(16).padStart(2, "0")).join("");
+      if (sum !== release.packedSha256) throw new Error("The downloaded file is damaged (its checksum differs). Download it again.");
+    }
+    try {
+      return await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).blob();
+    } catch (err) {
+      throw new Error("The file couldn't be unpacked. It may be incomplete. Download it again.");
+    }
+  }
 
   function sendUpdate(file, sha) {
     return new Promise((resolve, reject) => {
@@ -511,12 +542,13 @@
   }
 
   upSend.addEventListener("click", async () => {
-    const f = upFile.files[0];
+    let f = upFile.files[0];
     if (!f) return;
     upSend.disabled = true;
     $("#up-bar").hidden = false;
     $("#up-bar").value = 0;
     try {
+      if (await isGzip(f)) f = await unpack(f);
       const r = await sendUpdate(f, upSha.value.trim().toLowerCase());
       $("#up-result").textContent = "Sent. Installing…";
       await followUpdate(r.id);

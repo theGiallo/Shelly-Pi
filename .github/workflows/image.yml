@@ -56,9 +56,17 @@ jobs:
             [ -s notes.md ] || echo "See CHANGELOG.md." > notes.md
             gh release create "$TAG" --target "$GITHUB_SHA" --prerelease --title "$TAG" --notes-file notes.md
           fi
-          # The file you download is named with the version, like shelly-pi-image_v0.1.6.tar. The plain name
-          # stays for now, because the Update page of versions up to 0.1.5 looks for exactly that.
-          cp shelly-pi-image.tar "shelly-pi-image_${TAG}.tar"
-          sha256sum "shelly-pi-image_${TAG}.tar" > "shelly-pi-image_${TAG}.tar.sha256"
-          gh release upload "$TAG" "shelly-pi-image_${TAG}.tar" "shelly-pi-image_${TAG}.tar.sha256" \
+          # The file you download is compressed and named with the version, like shelly-pi-image_v0.1.7.tar.gz
+          # (about a third of the size). The Update page and the installer unpack it on your PC, so the Pi never
+          # has to. The plain shelly-pi-image.tar stays for now, because the Update page of versions up to 0.1.6
+          # looks for a .tar.
+          gzip -9 -n -k shelly-pi-image.tar
+          mv shelly-pi-image.tar.gz "shelly-pi-image_${TAG}.tar.gz"
+          sha256sum "shelly-pi-image_${TAG}.tar.gz" > "shelly-pi-image_${TAG}.tar.gz.sha256"
+          # The Update page checks the unpacked file against this line of the release notes.
+          TARSUM=$(sha256sum shelly-pi-image.tar | cut -d' ' -f1)
+          gh release view "$TAG" --json body -q .body | grep -v '^Unpacked image SHA-256:' > notes.md || true
+          printf '\nUnpacked image SHA-256: %s\n' "$TARSUM" >> notes.md
+          gh release edit "$TAG" --notes-file notes.md
+          gh release upload "$TAG" "shelly-pi-image_${TAG}.tar.gz" "shelly-pi-image_${TAG}.tar.gz.sha256" \
             shelly-pi-image.tar shelly-pi-image.tar.sha256 --clobber
