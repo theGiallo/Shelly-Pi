@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The update file is now compressed (`shelly-pi-image_v<version>.tar.gz`, about a third of the size). The Update page unpacks it in your browser and sends the plain image to the Pi, and the Windows installer unpacks it on your PC, so the Pi never has to. A plain `.tar` still works.
+
 ## 0.1.6
 
 - Setting the Pi's clock is now exact to a fraction of a second: the browser sends its time to the millisecond and the Pi adds the moment it took to get there, instead of ending up a second or two behind.
