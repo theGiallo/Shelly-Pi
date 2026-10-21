@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6
 
 - Setting the Pi's clock is now exact to a fraction of a second: the browser sends its time to the millisecond and the Pi adds the moment it took to get there, instead of ending up a second or two behind.
 - The hardware clock is found by itself: the installer always switches on support for a DS3231 module, and Settings shows a **Hardware clock** row saying whether the Pi sees one. No on/off switch needed; plug the module in with the Pi powered off.
