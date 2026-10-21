@@ -84,7 +84,7 @@
     btn.disabled = true;
     btn.textContent = "Setting the clock…";
     try {
-      await api("/api/system/time", { method: "POST", body: { epoch: Math.floor(Date.now() / 1000) } });
+      await api("/api/system/time", { method: "POST", body: { epoch: Date.now() / 1000 } });
       toast("The Pi's clock is set.");
       await load();
     } catch (err) {

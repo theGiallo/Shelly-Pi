@@ -92,7 +92,7 @@ class AdoptBody(BaseModel):
 
 
 class TimeBody(BaseModel):
-    epoch: int
+    epoch: float     # seconds, with a fraction: the browser sends its clock to the millisecond
 
 
 class SlotBody(BaseModel):
@@ -776,12 +776,17 @@ def create_app(
     async def set_time(body: TimeBody) -> dict:
         """Ask the host to set its clock (and the RTC). The container cannot do it
         itself, so it drops a request file that a host systemd path unit acts on."""
-        if not (cfg.min_valid_epoch <= body.epoch <= MAX_EPOCH):
+        if not (cfg.min_valid_epoch <= body.epoch <= MAX_EPOCH) or body.epoch != body.epoch:
             raise HTTPException(400, "That time is outside the supported range.")
         clock: ClockGuard = app.state.clock
         cfg.bridge_dir.mkdir(parents=True, exist_ok=True)
         tmp, req = cfg.bridge_dir / ".settime.tmp", cfg.bridge_dir / "settime.req"
-        await asyncio.to_thread(tmp.write_text, str(body.epoch))
+        # "<time> <uptime when written>": the host helper adds the time that passed before it ran.
+        try:
+            up = Path("/proc/uptime").read_text().split()[0]
+        except (OSError, IndexError):
+            up = ""
+        await asyncio.to_thread(tmp.write_text, f"{body.epoch:.3f} {up}".strip())
         await asyncio.to_thread(os.replace, tmp, req)
         t_start = time.monotonic()
         deadline = t_start + 15

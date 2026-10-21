@@ -211,7 +211,7 @@ def test_untrusted_clock_holds_samples_until_time_is_set(run_app, plugs):
         req = h.app.state.cfg.bridge_dir / "settime.req"
         while not stop.is_set():
             if req.exists():
-                epoch = int(req.read_text().strip())
+                epoch = float(req.read_text().split()[0])
                 req.unlink()
                 h.clock_offset["v"] = epoch - time.time()
             time.sleep(0.1)
