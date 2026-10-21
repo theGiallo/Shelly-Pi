@@ -380,19 +380,22 @@
   function askPower(action) {
     pwAction = action;
     const off = action === "poweroff";
-    $("#h-pw-d").textContent = off ? "Shut down the Pi?" : "Restart the Pi?";
+    $("#pw-q").textContent = off ? "Shut down the Pi?" : "Restart the Pi?";
+    $("#pw-msg").textContent = "";
     $("#pw-ask").textContent = off
       ? "The dashboard stops until someone plugs the Pi back in or presses its power button. No readings are taken while it is off."
       : "The dashboard is gone for a minute or two, then comes back by itself. No readings are taken meanwhile.";
     $("#pw-go").textContent = off ? "Shut down" : "Restart";
-    $("#pw-dialog").showModal();
+    $("#pw-confirm").hidden = false;
+    $("#pw-go").focus();
   }
   $("#pw-off").addEventListener("click", () => askPower("poweroff"));
   $("#pw-reboot").addEventListener("click", () => askPower("reboot"));
-  $("#pw-cancel").addEventListener("click", () => $("#pw-dialog").close());
+  $("#pw-cancel").addEventListener("click", () => { $("#pw-confirm").hidden = true; pwAction = null; });
   $("#pw-go").addEventListener("click", async () => {
+    if (!pwAction) return;
     const off = pwAction === "poweroff";
-    $("#pw-dialog").close();
+    $("#pw-confirm").hidden = true;
     try {
       await api("/api/power", { method: "POST", body: { action: pwAction, confirm: true } });
       $("#pw-off").disabled = $("#pw-reboot").disabled = true;

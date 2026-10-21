@@ -200,14 +200,14 @@
         <button type="button" class="btn" id="pw-reboot">Restart the Pi</button>
       </div>
       <p class="note" id="pw-msg" role="status"></p>
-      <dialog id="pw-dialog" aria-labelledby="h-pw-d">
-        <h2 id="h-pw-d">Shut down the Pi?</h2>
-        <p id="pw-ask"></p>
-        <div class="actions">
+      <div class="banner" id="pw-confirm" role="alertdialog" aria-labelledby="pw-q" hidden>
+        <strong id="pw-q"></strong>
+        <span id="pw-ask"></span>
+        <div class="actions" style="margin-top:10px">
           <button type="button" class="btn" id="pw-cancel">Cancel</button>
-          <button type="button" class="btn danger" id="pw-go">Shut down</button>
+          <button type="button" class="btn danger" id="pw-go"></button>
         </div>
-      </dialog>
+      </div>
     </section>
 
     <section class="section" id="update" aria-labelledby="h-update">

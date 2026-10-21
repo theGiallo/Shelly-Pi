@@ -12,7 +12,10 @@ REQ=$BRIDGE/power.req
 
 [ -f "$REQ" ] || exit 0
 LINE=$(head -c 100 "$REQ" | head -n 1)
+# A request that has been lying around (the helper was not installed then) must not fire now.
+STALE=$(find "$REQ" -mmin +1 2>/dev/null)
 rm -f "$REQ"
+if [ -n "$STALE" ]; then echo "power: ignoring an old request" >&2; exit 0; fi
 ACTION=$(printf '%s' "$LINE" | awk '{print $2}')
 
 case "$ACTION" in

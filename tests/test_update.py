@@ -156,13 +156,43 @@ def test_a_pi_without_wifi_has_no_dhcp_unit_to_restart(tmp_path):
 
 # ---- shutting down ---------------------------------------------------------------------------
 
-def test_power_needs_confirmation_and_queues_the_request(run_app, settings):
+def pretend_helper(bridge, delay=0.3):
+    """Stands in for the Pi's helper: takes the request file away shortly after it appears."""
+    import threading
+    import time
+
+    def run():
+        end = time.time() + 8
+        while time.time() < end:
+            if (bridge / "power.req").exists():
+                time.sleep(delay)
+                taken.append((bridge / "power.req").read_text())
+                (bridge / "power.req").unlink()
+                return
+            time.sleep(0.05)
+    taken: list[str] = []
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return taken
+
+
+def test_power_needs_confirmation_and_waits_for_the_helper(run_app, settings):
     h = run_app()
     assert h.client.post("/api/power", json={"action": "poweroff"}).status_code == 422
     assert h.client.post("/api/power", json={"action": "format", "confirm": True}).status_code == 422
+    bridge = settings.data_dir / "bridge"
+    bridge.mkdir(parents=True, exist_ok=True)
+    taken = pretend_helper(bridge)
     r = h.client.post("/api/power", json={"action": "poweroff", "confirm": True})
     assert r.status_code == 200
-    assert (settings.data_dir / "bridge" / "power.req").read_text().split()[1] == "poweroff"
+    assert taken and taken[0].split()[1] == "poweroff"
+
+
+def test_power_without_a_helper_says_so_and_leaves_nothing_behind(run_app, settings):
+    h = run_app()
+    r = h.client.post("/api/power", json={"action": "poweroff", "confirm": True})
+    assert r.status_code == 504 and "helper" in r.json()["detail"]
+    assert not (settings.data_dir / "bridge" / "power.req").exists()
 
 
 def test_power_is_refused_during_an_update(run_app, settings):
@@ -199,3 +229,18 @@ def test_power_script_runs_only_the_two_known_actions(tmp_path):
     (tmp_path / "c").mkdir()
     p, calls_ = run_power(tmp_path / "c", "abc halt; rm -rf /")
     assert p.returncode == 1 and calls_ == []
+
+
+def test_power_script_ignores_an_old_request(tmp_path):
+    import time
+    bridge = tmp_path / "bridge"
+    bridge.mkdir()
+    (bridge / "power.req").write_text("abc poweroff\n")
+    old = time.time() - 600
+    os.utime(bridge / "power.req", (old, old))
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "systemctl").write_text(f'#!/bin/sh\necho "$*" >> {tmp_path}/calls\n')
+    (tmp_path / "bin" / "systemctl").chmod(0o755)
+    subprocess.run(["sh", str(POWER)], check=True, capture_output=True, env={
+        **os.environ, "PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "SHELLY_BRIDGE": str(bridge), "SHELLY_POWER_DELAY": "0"})
+    assert not (bridge / "power.req").exists() and not (tmp_path / "calls").exists()

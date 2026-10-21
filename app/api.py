@@ -636,6 +636,7 @@ def create_app(
     # ---- updating the app ----------------------------------------------------------------------
 
     MAX_UPDATE_BYTES = 600 * 1024 * 1024
+    POWER_WAIT = 6.0
 
     def update_status() -> dict | None:
         try:
@@ -714,9 +715,17 @@ def create_app(
         cfg.bridge_dir.mkdir(parents=True, exist_ok=True)
         tmp = cfg.bridge_dir / ".power.tmp"
         tmp.write_text(f"{secrets.token_hex(6)} {body.action}\n")
-        os.replace(tmp, cfg.bridge_dir / "power.req")
-        log.info("the Pi is going to %s on request", body.action)
-        return {"ok": True, "action": body.action}
+        req = cfg.bridge_dir / "power.req"
+        os.replace(tmp, req)
+        # The helper takes the request file away the moment it starts, then waits a few seconds before acting.
+        for _ in range(int(POWER_WAIT / 0.2)):
+            await asyncio.sleep(0.2)
+            if not req.exists():
+                log.info("the Pi is going to %s on request", body.action)
+                return {"ok": True, "action": body.action}
+        req.unlink(missing_ok=True)    # nothing picked it up; don't leave it to fire later by surprise
+        raise HTTPException(504, "The Pi didn't react, so nothing was done. Its shutdown helper may not be installed: "
+                                 "run the installer again (or setup-host.sh on the Pi), then try once more.")
 
     # ---- about ---------------------------------------------------------------------------------
 
