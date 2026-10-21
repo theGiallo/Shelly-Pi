@@ -420,7 +420,8 @@
   // ---- updating the app ---------------------------------------------------------------------------
 
   const REPO = "theGiallo/Shelly-Pi";
-  const IMAGE_ASSET = "shelly-pi-image.tar";
+  // shelly-pi-image_v0.1.6.tar; releases up to 0.1.5 call it shelly-pi-image.tar
+  const isImage = (a) => /^shelly-pi-image(_v[0-9][0-9.]*)?\.tar$/.test(a.name);
   let release = null; // { tag, size, sha256, url }
   const upFile = $("#up-file"), upSha = $("#up-sha"), upSend = $("#up-send");
   const normVersion = (v) => String(v || "").trim().replace(/^v/i, "");
@@ -443,9 +444,9 @@
       catch (err) { throw new Error("Couldn't reach GitHub. This device needs internet for that (the Pi doesn't). You can also paste the checksum below and pick a file you already have."); }
       if (!res.ok) throw new Error(`GitHub answered ${res.status}.`);
       const list = await res.json();
-      const rel = list.find((r) => !r.draft && (r.assets || []).some((a) => a.name === IMAGE_ASSET));
+      const rel = list.find((r) => !r.draft && (r.assets || []).some(isImage));
       if (!rel) throw new Error("No release with an app image was found.");
-      const a = rel.assets.find((x) => x.name === IMAGE_ASSET);
+      const a = rel.assets.filter(isImage).sort((x, y) => y.name.length - x.name.length)[0];   // the one with the version in its name
       release = { tag: rel.tag_name, size: a.size, sha256: String(a.digest || "").replace(/^sha256:/, ""), url: a.browser_download_url };
       const same = normVersion(rel.tag_name) === normVersion(sys && sys.version);
       $("#up-found").textContent = same

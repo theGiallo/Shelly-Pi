@@ -331,16 +331,23 @@ Note "Copied to ~/Shelly-Pi on the Pi."
 
 # ---- 6. the container image -----------------------------------------------------------------------------------------
 
-function Get-ReleaseBase([string]$repo) {
-  # Download address of the newest release, pre-releases included ("releases/latest" skips those).
+function Get-ReleaseImage([string]$repo) {
+  # Addresses of the image and its checksum in the newest release, pre-releases included ("releases/latest" skips
+  # those). The file is named with the version (shelly-pi-image_v0.1.6.tar); releases up to 0.1.5 call it shelly-pi-image.tar.
   try {
     $c = (Invoke-WebRequest -UseBasicParsing -Uri "https://api.github.com/repos/$repo/releases?per_page=10" -Headers @{ "User-Agent" = "Shelly-Pi-installer" } -ErrorAction Stop).Content
     if ($c -is [byte[]]) { $c = [System.Text.Encoding]::UTF8.GetString($c) }
     foreach ($r in ($c | ConvertFrom-Json)) {
-      if (-not $r.draft -and $r.tag_name) { return "https://github.com/$repo/releases/download/$($r.tag_name)" }
+      if ($r.draft -or -not $r.tag_name) { continue }
+      $tars = @($r.assets | Where-Object { $_.name -match '^shelly-pi-image(_v[0-9][0-9.]*)?\.tar$' } | Sort-Object { $_.name.Length } -Descending)
+      if ($tars.Count -eq 0) { continue }
+      $sum = @($r.assets | Where-Object { $_.name -eq ($tars[0].name + ".sha256") })
+      if ($sum.Count -eq 0) { continue }
+      return @{ Tar = $tars[0].browser_download_url; Sum = $sum[0].browser_download_url; Name = $tars[0].name }
     }
   } catch { }
-  return "https://github.com/$repo/releases/latest/download"
+  $b = "https://github.com/$repo/releases/latest/download"
+  return @{ Tar = "$b/shelly-pi-image.tar"; Sum = "$b/shelly-pi-image.tar.sha256"; Name = "shelly-pi-image.tar" }
 }
 
 function Get-File([string]$url, [string]$dest) {
@@ -410,18 +417,24 @@ if ($BuildOnPi) {
 } else {
   $cache = Join-Path $env:LOCALAPPDATA "Shelly-Pi"
   New-Item -ItemType Directory -Force -Path $cache | Out-Null
-  $base = Get-ReleaseBase $Repo
-  $tar = Join-Path $cache "shelly-pi-image.tar"
-  $sum = Join-Path $cache "shelly-pi-image.tar.sha256"
+  $rel = Get-ReleaseImage $Repo
+  $tar = Join-Path $cache $rel.Name
+  $sum = Join-Path $cache ($rel.Name + ".sha256")
   $old = $ProgressPreference
   try {
     $ProgressPreference = "SilentlyContinue"   # the progress bar makes downloads in Windows PowerShell very slow
     Note "Downloading the image from the newest release of $Repo (about 180 MB) ..."
-    Invoke-WebRequest -UseBasicParsing -Uri "$base/shelly-pi-image.tar.sha256" -OutFile $sum -ErrorAction Stop
-    Get-File "$base/shelly-pi-image.tar" $tar
+    Invoke-WebRequest -UseBasicParsing -Uri $rel.Sum -OutFile $sum -ErrorAction Stop
     $want = ((Get-Content -Raw $sum).Trim() -split "\s+")[0].ToLower()
-    $have = (Get-FileHash -Algorithm SHA256 $tar -ErrorAction Stop).Hash.ToLower()
-    if ($want -ne $have) { throw "the download is damaged (checksum differs)" }
+    $have = ""
+    if (Test-Path $tar) { $have = (Get-FileHash -Algorithm SHA256 $tar -ErrorAction Stop).Hash.ToLower() }
+    if ($want -eq $have) {
+      Note "Already downloaded ($($rel.Name))."
+    } else {
+      Get-File $rel.Tar $tar
+      $have = (Get-FileHash -Algorithm SHA256 $tar -ErrorAction Stop).Hash.ToLower()
+      if ($want -ne $have) { throw "the download is damaged (checksum differs)" }
+    }
     $image = $tar
     Note "Downloaded and checked."
   } catch {

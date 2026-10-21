@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The update file you download is now named with the version, like `shelly-pi-image_v0.1.6.tar`. The Update page and the Windows installer find it by that name. The plain `shelly-pi-image.tar` stays on the release for now, because the Update page of version 0.1.5 and earlier looks for it.
+
 ## 0.1.5
 
 - Backup files now have the app version at the end of the name, like `shelly-pi_2026-10-17_03-53-00_v0.1.5.zip`. Older names still work, and the USB drive cleanup counts both.

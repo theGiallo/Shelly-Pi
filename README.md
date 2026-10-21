@@ -237,7 +237,7 @@ Containers and your data live outside the OS image, so OS updates don't touch th
 
 **Updating the app from the dashboard.** Settings, **Update the app**. The Pi has no internet, so a device that
 does have some does the downloading: "Look for a new version" asks GitHub which release is newest, "Download
-the update" saves `shelly-pi-image.tar` (about 190 MB) on that device, and you pick that file and send it to the
+the update" saves `shelly-pi-image_v<version>.tar` (about 190 MB) on that device, and you pick that file and send it to the
 Pi. The Pi checks the file against the release's SHA-256 checksum, loads it and restarts the app; your data is
 kept. If the new version doesn't answer within 90 seconds, the previous image is put back. (The page asks
 GitHub's API from your browser, which is why the page's security policy allows `api.github.com`.) The page can
