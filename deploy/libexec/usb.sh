@@ -120,10 +120,8 @@ fi
 UUID=$(printf '%s' "$LINE" | awk '{print $3}' | tr -cd 'A-Za-z0-9-' | head -c 64)
 NAME=$(printf '%s' "$LINE" | awk '{print $4}')
 KEEP=$(printf '%s' "$LINE" | awk '{print $5}' | tr -cd '0-9' | head -c 4)
-case "$NAME" in
-  shelly-pi_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].zip) ;;
-  *) fail "That isn't a backup file name." ;;
-esac
+BACKUP_RE='^shelly-pi_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}(_v[0-9]+\.[0-9]+\.[0-9]+)?\.zip$'
+printf '%s\n' "$NAME" | grep -Eq "$BACKUP_RE" || fail "That isn't a backup file name."
 [ -n "$UUID" ] || fail "No drive was named."
 [ -n "$KEEP" ] && [ "$KEEP" -ge 1 ] && [ "$KEEP" -le 3650 ] || fail "Keep between 1 and 3650 backups."
 SRC=$OUT/$NAME
@@ -176,12 +174,7 @@ mv -f "$DIR/.$NAME.part" "$DIR/$NAME" || fail "Couldn't finish the copy."
 [ "$(wc -c < "$DIR/$NAME")" -eq "$SIZE" ] || { rm -f "$DIR/$NAME"; fail "The copy on the drive is the wrong size."; }
 
 # Keep the newest $KEEP, by name (names sort by date). Nothing else in the folder is touched.
-is_backup() {
-  case "$1" in
-    shelly-pi_[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]-[0-9][0-9].zip) return 0 ;;
-    *) return 1 ;;
-  esac
-}
+is_backup() { printf '%s\n' "$1" | grep -Eq "$BACKUP_RE"; }
 COUNT=0
 for f in "$DIR"/shelly-pi_*.zip; do
   if [ -f "$f" ] && is_backup "${f##*/}"; then COUNT=$((COUNT + 1)); fi

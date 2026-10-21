@@ -524,7 +524,7 @@ def create_app(
 
     @app.get("/api/backup")
     async def export_backup(tz: str | None = None) -> FileResponse:
-        """Everything the Pi stores, as one zip named shelly-pi_yyyy-mm-dd_HH-MM-ss.zip.
+        """Everything the Pi stores, as one zip named shelly-pi_yyyy-mm-dd_HH-MM-ss_v<version>.zip.
         The time in the name is the Pi's clock in the caller's time zone (?tz=Europe/Rome)."""
         zone = backup.zone_or(tz, app.state.tariff.timezone)
         async with app.state.admin_lock:

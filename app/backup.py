@@ -7,7 +7,7 @@ An archive is a zip with these members and nothing else:
   config.json            the tunable settings, without the two passwords
   dhcp-hosts.d/*.conf    the address each plug is pinned to
 
-It is named shelly-pi_yyyy-mm-dd_HH-MM-ss.zip, so a folder of backups sorts by date.
+It is named shelly-pi_yyyy-mm-dd_HH-MM-ss_v<version>.zip, so a folder of backups sorts by date.
 
 Restoring replaces the database, the plugs' address reservations and the tunable settings
 (poll interval, retention and so on). It deliberately keeps this Pi's own Wi-Fi name and
@@ -69,8 +69,10 @@ def stamp(epoch: float, tz: ZoneInfo) -> str:
     return datetime.fromtimestamp(epoch, tz).strftime("%Y-%m-%d_%H-%M-%S")
 
 
-def archive_name(epoch: float, tz: ZoneInfo) -> str:
-    return f"shelly-pi_{stamp(epoch, tz)}.zip"
+def archive_name(epoch: float, tz: ZoneInfo, version: str | None = None) -> str:
+    """shelly-pi_yyyy-mm-dd_HH-MM-ss_v0.1.5.zip: the date sorts first, the app version that made it comes last."""
+    from . import __version__
+    return f"shelly-pi_{stamp(epoch, tz)}_v{version or __version__}.zip"
 
 
 # ---- export ----------------------------------------------------------------------------

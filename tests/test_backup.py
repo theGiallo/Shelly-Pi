@@ -14,17 +14,17 @@ import pytest
 
 from app import backup
 
-NAME_RE = re.compile(r"^shelly-pi_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.zip$")
+NAME_RE = re.compile(r"^shelly-pi_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_v\d+\.\d+\.\d+\.zip$")
 TARIFF = {"enabled": True, "currency": "CHF", "currency_after": True, "decimals": 2,
           "timezone": "Europe/Zurich", "base_price": 0.31, "slots": []}
 
 
 def test_archive_name_is_sortable_and_uses_the_zone():
     rome = ZoneInfo("Europe/Rome")
-    a = backup.archive_name(1_792_200_000, rome)     # 2026-10-17 ~01:20 UTC
-    assert NAME_RE.match(a)
-    assert a == "shelly-pi_2026-10-17_03-20-00.zip"          # +02:00
-    assert backup.archive_name(1_792_200_000, ZoneInfo("UTC")) == "shelly-pi_2026-10-17_01-20-00.zip"
+    a = backup.archive_name(1_792_200_000, rome, "0.1.5")     # 2026-10-17 ~01:20 UTC
+    assert NAME_RE.match(backup.archive_name(1_792_200_000, rome))
+    assert a == "shelly-pi_2026-10-17_03-20-00_v0.1.5.zip"          # +02:00
+    assert backup.archive_name(1_792_200_000, ZoneInfo("UTC"), "0.1.5") == "shelly-pi_2026-10-17_01-20-00_v0.1.5.zip"
     names = [backup.archive_name(t, rome) for t in (1_792_200_000 + 86400 * k for k in (3, 0, 40, 1))]
     assert sorted(names) == [backup.archive_name(t, rome) for t in sorted(1_792_200_000 + 86400 * k for k in (3, 0, 40, 1))]
     assert backup.zone_or("Not/AZone", "UTC").key == "UTC"

@@ -96,3 +96,19 @@ def test_request_without_an_id_is_ignored(helper):
     (helper.bridge / "usb.req").write_text("   \n")
     out = subprocess.run(["sh", str(SCRIPT)], env=dict(os.environ, SHELLY_BRIDGE=str(helper.bridge)), capture_output=True)
     assert out.returncode == 1 and not (helper.bridge / "usb.res.json").exists()
+
+
+def test_names_with_the_app_version_are_backups_too(helper):
+    folder = helper.drive / "shelly-pi-backups"
+    folder.mkdir()
+    (folder / "shelly-pi_2026-01-01_00-00-00.zip").write_text("old name")
+    (folder / "shelly-pi_2026-01-02_00-00-00_v0.1.4.zip").write_text("versioned")
+    (folder / "shelly-pi_2026-01-03_00-00-00_vX.zip").write_text("not ours")
+    new = "shelly-pi_2026-10-17_00-00-00_v0.1.5.zip"
+    (helper.bridge / "outgoing" / new).write_bytes(b"z" * 100)
+    r = helper(f"c1 copy 1234-ABCD {new} 2")
+    assert r["ok"] is True and r["removed"] == 1
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "shelly-pi_2026-01-02_00-00-00_v0.1.4.zip", "shelly-pi_2026-01-03_00-00-00_vX.zip", new]
+    bad = helper("c2 copy 1234-ABCD shelly-pi_2026-10-17_00-00-00_v1/../x.zip 2")
+    assert bad["ok"] is False
