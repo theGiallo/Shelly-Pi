@@ -123,6 +123,12 @@ class ResetCaBody(BaseModel):
     confirm: bool = False
 
 
+class PriceChangeBody(BaseModel):
+    start: str = Field(max_length=10)          # the date the prices start on, yyyy-mm-dd
+    base_price: float = 0.0
+    slots: list[SlotBody] = Field(default_factory=list, max_length=tariff_mod.MAX_SLOTS)
+
+
 class TariffBody(BaseModel):
     enabled: bool = False
     currency: str = Field(default="€", max_length=16)
@@ -131,6 +137,7 @@ class TariffBody(BaseModel):
     timezone: str = Field(default="UTC", max_length=64)
     base_price: float = 0.0
     slots: list[SlotBody] = Field(default_factory=list, max_length=tariff_mod.MAX_SLOTS)
+    changes: list[PriceChangeBody] = Field(default_factory=list, max_length=tariff_mod.MAX_CHANGES)
 
 
 def create_app(
@@ -230,8 +237,8 @@ def create_app(
         t: tariff_mod.Tariff = app.state.tariff
         view = t.to_dict()
         if t.enabled and now is not None:
-            i = t.index_at(now)
-            view["now"] = {"slot": t.slots[i].name if i >= 0 else None, "price": t.price_for(i)}
+            i, p = t.index_at(now), t.prices_at(now)
+            view["now"] = {"slot": p.slots[i].name if i >= 0 else None, "price": p.price_for(i)}
         return view
 
     def device_view(
@@ -459,6 +466,8 @@ def create_app(
         t: tariff_mod.Tariff = app.state.tariff
         view = tariff_view(eff_now())
         view["week"] = t.week()
+        for c, (_start, prices) in zip(view["changes"], t.all_prices()[1:]):
+            c["week"] = prices.week()
         return view
 
     @app.get("/api/tariff")

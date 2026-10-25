@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Electricity prices can change over time. In Settings, **Add a price change** with the date the new prices start. Days before it keep the old prices, so past costs no longer move when the energy company raises or lowers its price. You can add as many changes as you need, and edit or remove each one.
 - The About, license and changelog window has an X at the top right and closes when you click outside it.
 - The Update page has a box to drag the downloaded file onto, next to the file picker.
 

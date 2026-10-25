@@ -152,3 +152,67 @@ def test_api_tariff_roundtrip_and_cost_in_state(run_app, plugs):
     assert h.client.put("/api/tariff", json={**body, "slots": [{"price": 1, "days": [1], "start": "08:07", "end": "09:00"}]}).status_code == 422
     # the invalid attempts changed nothing
     assert h.client.get("/api/tariff").json()["currency"] == "£"
+
+
+def with_change(start="2027-01-01", base=0.40, **kw):
+    return italian(changes=[{"start": start, "base_price": base,
+                             "slots": [{"name": "F1", "price": 0.50, "days": [0, 1, 2, 3, 4], "start": "08:00", "end": "19:00"}]}], **kw)
+
+
+def test_a_price_change_applies_from_its_date_and_leaves_the_past_alone():
+    t = with_change()
+    before, after = ts(2026, 12, 31, 12), ts(2027, 1, 4, 12)      # Thu 31 Dec 2026, Mon 4 Jan 2027, both noon
+    assert t.price_at(before) == 0.30 and t.price_at(after) == 0.50   # F1 both days, new price after
+    assert t.price_at(ts(2026, 12, 27, 12)) == 0.10 and t.price_at(ts(2027, 1, 3, 12)) == 0.40   # Sunday: old F3, then new base
+    assert t.price_at(ts(2026, 12, 31, 23, 59)) == 0.10             # up to the last minute of the old day: old prices
+    assert t.price_at(ts(2027, 1, 1, 0, 0)) == 0.40                 # from midnight: new base (no night slot any more)
+    assert t.prices_at(ts(2027, 1, 1, 0, 0)).slots[0].price == 0.50
+
+
+def test_several_changes_are_sorted_and_each_one_ends_at_the_next():
+    t = italian(changes=[{"start": "2028-03-01", "base_price": 0.9}, {"start": "2027-01-01", "base_price": 0.4}])
+    assert [c.start.isoformat() for c in t.changes] == ["2027-01-01", "2028-03-01"]
+    assert t.price_at(ts(2026, 6, 6, 12)) == 0.20                   # Saturday noon: base from the start
+    assert t.price_at(ts(2027, 6, 5, 12)) == 0.40
+    assert t.price_at(ts(2028, 6, 3, 12)) == 0.90
+
+
+def test_cost_over_a_change_uses_each_days_own_prices():
+    t = with_change(start="2026-10-13")                              # new prices from Tue 13 Oct
+    t0, t1 = ts(2026, 10, 12, 9), ts(2026, 10, 14, 9)                # Mon 09:00 to Wed 09:00 at 1 kW
+    db = _db_with_constant_load(t0, t1)
+    cfg = Settings(data_dir=__import__("pathlib").Path("."))
+    wh, cost = history.energy_cost(db, cfg, t1 + 100, 1, t0, t1, t)
+    # Mon 09:00-24:00 on the old prices: 09-19 F1 0.30, 19-23 base 0.20, 23-24 F3 0.10
+    mon = 10 * 0.30 + 4 * 0.20 + 1 * 0.10
+    # Tue 13 Oct on the new prices: 00-08 base 0.40, 08-19 F1 0.50, 19-24 base 0.40
+    tue = 8 * 0.40 + 11 * 0.50 + 5 * 0.40
+    wed = 0.40 * 8 + 0.50 * 1                          # Wed 00-08 base, 08-09 F1
+    assert cost == pytest.approx(mon + tue + wed, abs=0.02)
+    db.close()
+
+
+def test_changes_are_validated_and_old_data_still_loads():
+    with pytest.raises(TariffError, match="two price changes"):
+        italian(changes=[{"start": "2027-01-01", "base_price": 1}, {"start": "2027-01-01", "base_price": 2}])
+    with pytest.raises(TariffError, match="needs a date"):
+        italian(changes=[{"start": "soon", "base_price": 1}])
+    with pytest.raises(TariffError, match="Prices from 2027-01-01"):
+        italian(changes=[{"start": "2027-01-01", "base_price": -1}])
+    old = Tariff.from_dict({"enabled": True, "base_price": 0.3, "slots": []})      # saved before changes existed
+    assert old.changes == [] and old.price_at(ts(2026, 6, 6, 12)) == 0.3
+    t = with_change()
+    assert Tariff.from_dict(t.to_dict()).changes[0].prices.slots[0].price == 0.50
+
+
+def test_api_price_change_roundtrip(run_app, plugs):
+    plugs(mac="AABBCCDDEE01")
+    h = run_app()
+    body = {"enabled": True, "currency": "€", "decimals": 2, "timezone": "Europe/Rome", "base_price": 0.25, "slots": [],
+            "changes": [{"start": "2027-01-01", "base_price": 0.35, "slots": [
+                {"name": "Night", "price": 0.1, "days": [0, 1, 2, 3, 4, 5, 6], "start": "00:30", "end": "07:30"}]}]}
+    got = h.client.put("/api/tariff", json=body).json()
+    assert got["base_price"] == 0.25 and got["changes"][0]["start"] == "2027-01-01"
+    assert len(got["changes"][0]["week"]) == 7 and got["changes"][0]["slots"][0]["name"] == "Night"
+    assert h.client.put("/api/tariff", json={**body, "changes": [{"start": "nope"}]}).status_code == 422
+    assert h.client.get("/api/tariff").json()["changes"][0]["base_price"] == 0.35

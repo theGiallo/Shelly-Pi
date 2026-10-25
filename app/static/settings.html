@@ -63,6 +63,21 @@
             <select id="t-decimals"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
           </div>
         </div>
+        <div class="field" id="t-period-field">
+          <label for="t-period">Prices to edit</label>
+          <div class="copy-row">
+            <select id="t-period"></select>
+            <button type="button" class="btn small" id="t-addperiod">Add a price change&hellip;</button>
+            <button type="button" class="btn small danger" id="t-delperiod">Remove this change</button>
+          </div>
+          <div class="copy-row" id="t-newperiod" hidden>
+            <label for="t-newdate">New prices start on</label>
+            <input id="t-newdate" type="date">
+            <button type="button" class="btn small primary" id="t-newgo">Add</button>
+            <button type="button" class="btn small" id="t-newcancel">Cancel</button>
+          </div>
+          <span class="hint">When the energy company changes its prices, add a change with the date it starts. Days before that date keep the old prices, so past costs stay as they were. The new prices start as a copy of the ones you are looking at; edit them, then press Save.</span>
+        </div>
         <div class="form-row">
           <div class="field">
             <label for="t-base">Price per kWh</label>
@@ -87,7 +102,7 @@
         <ul id="t-legend" class="legend"></ul>
       </div>
       <div class="actions"><button type="button" class="btn primary" id="t-save">Save prices</button></div>
-      <p class="note" style="margin-top:10px">Costs are worked out from the readings and today's prices, so changing a price changes the cost shown for past days as well.</p>
+      <p class="note" style="margin-top:10px">Each day's cost uses the prices that applied on that day. Editing the prices of a period changes the cost of the days in that period; to change prices from a date onwards, add a price change instead.</p>
     </section>
 
     <section class="section" aria-labelledby="h-wifi">

@@ -182,29 +182,70 @@
     $("#t-legend").replaceChildren(...items);
   }
 
+  // The prices are edited one period at a time: the first (valid from the start), then one per price change.
+  let periods = [];   // { start: "yyyy-mm-dd" | null, base, slots, saved: { base_price, slots, week } }
+  let cur = 0;
+
+  const copySlots = (list) => list.map((s) => ({ ...s, days: [...s.days] }));
+  const niceDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  const todayIn = (zone) => {
+    try { return new Date().toLocaleDateString("sv-SE", { timeZone: zone || undefined }); } catch (e) { return new Date().toLocaleDateString("sv-SE"); }
+  };
+
+  function renderPeriods() {
+    const today = todayIn($("#t-tz").value.trim() || (tariff && tariff.timezone));
+    let now = 0;
+    periods.forEach((p, i) => { if (i > 0 && p.start <= today) now = i; });
+    $("#t-period").replaceChildren(...periods.map((p, i) => {
+      const next = periods[i + 1];
+      const range = i === 0 ? (next ? `Until ${niceDate(next.start)}` : "All dates") : `From ${niceDate(p.start)}`;
+      return el("option", { value: String(i), text: range + (periods.length > 1 && i === now ? " (now)" : "") });
+    }));
+    $("#t-period").value = String(cur);
+    $("#t-delperiod").hidden = cur === 0;
+    $("#t-addperiod").disabled = periods.length >= 61;
+  }
+
+  function showPeriod() {
+    const p = periods[cur];
+    slots = p.slots;
+    $("#t-base").value = p.base || "";
+    renderPeriods();
+    renderSlots();
+    renderWeek({ ...tariff, base_price: p.saved.base_price, slots: p.saved.slots, week: p.saved.week });
+  }
+
   function showTariff(t) {
     tariff = t;
     $("#t-enabled").checked = t.enabled;
     $("#t-currency").value = t.currency;
     $("#t-position").value = t.currency_after ? "after" : "before";
     $("#t-decimals").value = String(t.decimals);
-    $("#t-base").value = t.base_price || "";
     $("#t-tz").value = t.timezone === "UTC" && !t.enabled ? deviceZone() || "UTC" : t.timezone;
-    slots = t.slots.map((s) => ({ ...s, days: [...s.days] }));
-    renderSlots();
-    renderWeek(t);
+    const mk = (start, x, week) => ({ start, base: x.base_price || "", slots: copySlots(x.slots),
+      saved: { base_price: x.base_price, slots: copySlots(x.slots), week } });
+    periods = [mk(null, t, t.week), ...(t.changes || []).map((c) => mk(c.start, c, c.week))];
+    const today = todayIn(t.timezone);
+    cur = 0;
+    periods.forEach((p, i) => { if (i > 0 && p.start <= today) cur = i; });
+    $("#t-newperiod").hidden = true;
+    showPeriod();
   }
 
   function collectTariff() {
     const num = (v) => (v === "" || v == null ? NaN : Number(v));
+    const prices = (p) => ({
+      base_price: num(p.base) || 0,
+      slots: p.slots.map((s) => ({ name: s.name.trim(), price: num(s.price), days: s.days, start: s.start, end: s.end })),
+    });
     return {
       enabled: $("#t-enabled").checked,
       currency: $("#t-currency").value.trim(),
       currency_after: $("#t-position").value === "after",
       decimals: Number($("#t-decimals").value),
       timezone: $("#t-tz").value.trim(),
-      base_price: num($("#t-base").value) || 0,
-      slots: slots.map((s) => ({ name: s.name.trim(), price: num(s.price), days: s.days, start: s.start, end: s.end })),
+      ...prices(periods[0]),
+      changes: periods.slice(1).map((p) => ({ start: p.start, ...prices(p) })),
     };
   }
 
@@ -212,6 +253,35 @@
     try { showTariff(await api("/api/tariff")); } catch (e) { toast(e.message); }
   }
 
+  $("#t-base").addEventListener("input", (e) => { periods[cur].base = e.target.value; });
+  $("#t-period").addEventListener("change", (e) => { cur = Number(e.target.value); showPeriod(); });
+  $("#t-addperiod").addEventListener("click", () => {
+    $("#t-newperiod").hidden = false;
+    $("#t-newdate").value = "";
+    $("#t-newdate").focus();
+  });
+  $("#t-newcancel").addEventListener("click", () => { $("#t-newperiod").hidden = true; });
+  $("#t-newgo").addEventListener("click", () => {
+    const date = $("#t-newdate").value;
+    if (!date) { toast("Pick the date the new prices start on."); return; }
+    if (periods.some((p) => p.start === date)) { toast("There is already a price change on that date."); return; }
+    const from = periods[cur];
+    periods.push({ start: date, base: from.base, slots: copySlots(from.slots),
+      saved: { base_price: from.saved.base_price, slots: copySlots(from.saved.slots), week: from.saved.week } });
+    const first = periods.shift();
+    periods.sort((x, y) => (x.start < y.start ? -1 : 1));
+    periods.unshift(first);
+    cur = periods.findIndex((p) => p.start === date);
+    $("#t-newperiod").hidden = true;
+    showPeriod();
+    toast(`New prices from ${niceDate(date)}. Edit them and press Save.`);
+  });
+  $("#t-delperiod").addEventListener("click", () => {
+    if (cur === 0) return;
+    periods.splice(cur, 1);
+    cur = Math.min(cur, periods.length - 1);
+    showPeriod();
+  });
   $("#t-add").addEventListener("click", () => {
     slots.push({ name: "", price: "", days: [0, 1, 2, 3, 4], start: "08:00", end: "19:00" });
     renderSlots();
@@ -222,7 +292,7 @@
   $("#t-save").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     const body = collectTariff();
-    if (body.slots.some((s) => Number.isNaN(s.price))) { toast("Every time slot needs a price."); return; }
+    if ([body, ...body.changes].some((p) => p.slots.some((s) => Number.isNaN(s.price)))) { toast("Every time slot needs a price."); return; }
     btn.disabled = true;
     try {
       showTariff(await api("/api/tariff", { method: "PUT", body }));
