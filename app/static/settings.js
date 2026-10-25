@@ -443,6 +443,26 @@
   });
   upSha.addEventListener("input", upReady);
 
+  // Drag the downloaded file onto the box instead of using the file picker.
+  const drop = $("#up-drop");
+  for (const type of ["dragenter", "dragover"]) {
+    drop.addEventListener(type, (e) => { e.preventDefault(); drop.classList.add("is-over"); });
+  }
+  drop.addEventListener("dragleave", (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("is-over"); });
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("is-over");
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    if (!/\.(tar|gz|tgz)$/i.test(f.name)) { $("#up-result").textContent = `${f.name} isn't an update file. It should end in .tar.gz or .tar.`; return; }
+    upFile.files = e.dataTransfer.files;
+    upFile.dispatchEvent(new Event("change"));
+  });
+  upFile.addEventListener("change", () => {
+    const f = upFile.files[0];
+    $("#up-drop-text").textContent = f ? `${f.name} (${fmt.bytes(f.size)}) — drop another file to replace it, or` : "Drop the file here, or";
+  });
+
   $("#up-check").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;

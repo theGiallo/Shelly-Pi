@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Update page has a box to drag the downloaded file onto, next to the file picker.
+
 ## 0.1.8
 
 - Switching a plug on or off from the dashboard now asks first ("Switch off My PC?"). Each plug has an **Ask before switching this plug** setting in its edit dialog, on by default, for things like a lamp where you'd rather not be asked.

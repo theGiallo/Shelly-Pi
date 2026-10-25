@@ -220,7 +220,10 @@
         <div class="actions"><a class="btn primary" id="up-download" href="#" rel="noopener">Download the update</a></div>
         <div class="field">
           <label for="up-file">Then pick the downloaded file (named like shelly-pi-image_v0.1.7.tar.gz; a plain .tar works too)</label>
-          <input id="up-file" type="file" accept=".tar,.gz,.tgz,application/x-tar,application/gzip">
+          <div class="dropzone" id="up-drop">
+            <span id="up-drop-text">Drop the file here, or</span>
+            <input id="up-file" type="file" accept=".tar,.gz,.tgz,application/x-tar,application/gzip">
+          </div>
         </div>
         <div class="field">
           <label for="up-sha">Checksum (SHA-256) it must match</label>
