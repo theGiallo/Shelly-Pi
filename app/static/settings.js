@@ -423,6 +423,15 @@
     } catch (err) { toast(err.message); }
   });
 
+  // Close with the X, or by clicking outside the box (a click on the dimmed area lands on the dialog element itself).
+  const aboutDlg = $("#about-dialog");
+  $("#about-x").addEventListener("click", () => aboutDlg.close());
+  aboutDlg.addEventListener("click", (e) => {
+    if (e.target !== aboutDlg) return;
+    const r = aboutDlg.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) aboutDlg.close();
+  });
+
   // ---- updating the app ---------------------------------------------------------------------------
 
   const REPO = "theGiallo/Shelly-Pi";

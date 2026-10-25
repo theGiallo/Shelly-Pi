@@ -421,3 +421,10 @@ pre.plain { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 var(-
 
 .dropzone { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 18px 16px; border: 2px dashed var(--line); border-radius: 10px; }
 .dropzone.is-over { border-color: var(--accent, #2a44c9); background: color-mix(in srgb, var(--accent, #2a44c9) 8%, transparent); }
+
+.dlg-x {
+  position: sticky; top: 0; float: right; z-index: 1; margin: -6px -6px 0 8px;
+  width: 36px; height: 36px; border: 0; border-radius: 50%;
+  background: var(--panel); color: var(--muted); font: 400 26px/1 var(--font-ui); cursor: pointer;
+}
+.dlg-x:hover, .dlg-x:focus-visible { background: var(--line); color: var(--ink); }

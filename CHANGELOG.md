@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The About, license and changelog window has an X at the top right and closes when you click outside it.
 - The Update page has a box to drag the downloaded file onto, next to the file picker.
 
 ## 0.1.8
