@@ -116,6 +116,7 @@ class AutoBackupBody(BaseModel):
     hour: int = 0
     timezone: str = Field(default="UTC", max_length=64)
     keep: int = 14
+    thin: bool = False
 
 
 class ResetCaBody(BaseModel):

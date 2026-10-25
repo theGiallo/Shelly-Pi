@@ -119,11 +119,14 @@ fi
 [ "$CMD" = copy ] || fail "Unknown request."
 UUID=$(printf '%s' "$LINE" | awk '{print $3}' | tr -cd 'A-Za-z0-9-' | head -c 64)
 NAME=$(printf '%s' "$LINE" | awk '{print $4}')
-KEEP=$(printf '%s' "$LINE" | awk '{print $5}' | tr -cd '0-9' | head -c 4)
+KEEP=$(printf '%s' "$LINE" | awk '{print $5}' | tr -cd '0-9a-z' | head -c 4)
 BACKUP_RE='^shelly-pi_[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}(_v[0-9]+\.[0-9]+\.[0-9]+)?\.zip$'
 printf '%s\n' "$NAME" | grep -Eq "$BACKUP_RE" || fail "That isn't a backup file name."
 [ -n "$UUID" ] || fail "No drive was named."
-[ -n "$KEEP" ] && [ "$KEEP" -ge 1 ] && [ "$KEEP" -le 3650 ] || fail "Keep between 1 and 3650 backups."
+if [ "$KEEP" != thin ]; then
+  case $KEEP in ""|*[!0-9]*) fail "Keep between 1 and 3650 backups." ;; esac
+  [ "$KEEP" -ge 1 ] && [ "$KEEP" -le 3650 ] || fail "Keep between 1 and 3650 backups."
+fi
 SRC=$OUT/$NAME
 [ -f "$SRC" ] || fail "The backup file isn't there to copy."
 SIZE=$(wc -c < "$SRC")
@@ -180,7 +183,42 @@ for f in "$DIR"/shelly-pi_*.zip; do
   if [ -f "$f" ] && is_backup "${f##*/}"; then COUNT=$((COUNT + 1)); fi
 done
 REMOVED=0
-if [ "$COUNT" -gt "$KEEP" ]; then
+if [ "$KEEP" = thin ]; then
+  # Spread over time: a backup is kept when it is the first one in a time window whose length grows with its age
+  # (1 h, 2 h, 4 h, 8 h, then 1 d, 2 d, 4 d, 8 d, 16 d, 32 d ... doubling), and nothing older than two years stays.
+  # The windows divide each other, so a backup kept at one age is still the right one to keep at the next.
+  # Ages are counted from the newest backup, and the times come from the file names.
+  LIST=""
+  for f in "$DIR"/shelly-pi_*.zip; do
+    if [ -f "$f" ] && is_backup "${f##*/}"; then
+      b=${f##*/}; d=${b#shelly-pi_}
+      t=$(printf '%s' "$d" | cut -c1-10)" "$(printf '%s' "$d" | cut -c12-19 | tr '-' ':')
+      e=$(date -u -d "$t" +%s 2>/dev/null) || continue
+      LIST="$LIST$e $b
+"
+    fi
+  done
+  DROP=$(printf '%s' "$LIST" | awk '
+    NF == 2 { e[NR] = $1; n[NR] = $2; if ($1 > newest) newest = $1; total = NR }
+    END {
+      split("1 2 4 8 24 48 96 192 384 768 1536 3072 6144 12288", w, " ")
+      for (i = 1; i <= total; i++) {
+        age = (newest - e[i]) / 3600
+        win = 1
+        for (k = 1; k in w; k++) if (w[k] <= age) win = w[k]
+        key[i] = win ":" int(e[i] / (win * 3600))
+        if (!(key[i] in first) || e[i] < first[key[i]]) first[key[i]] = e[i]
+      }
+      for (i = 1; i <= total; i++) {
+        age = (newest - e[i]) / 3600
+        if (e[i] == newest) continue
+        if (age > 17520 || e[i] != first[key[i]]) print n[i]
+      }
+    }')
+  for b in $DROP; do
+    if is_backup "$b" && rm -f "$DIR/$b"; then REMOVED=$((REMOVED + 1)); fi
+  done
+elif [ "$COUNT" -gt "$KEEP" ]; then
   EXCESS=$((COUNT - KEEP))
   for f in "$DIR"/shelly-pi_*.zip; do        # the shell lists them in name order
     [ "$EXCESS" -gt 0 ] || break

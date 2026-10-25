@@ -602,9 +602,12 @@
       $("#ab-every").value = String(p.every_hours);
       $("#ab-hour").value = String(p.hour);
       $("#ab-keep").value = String(p.keep);
+      $("#ab-mode").value = p.thin ? "thin" : "last";
       $("#ab-tz").value = p.timezone === "UTC" && !p.enabled && !p.drive ? deviceZone() || "UTC" : p.timezone;
     }
     $("#ab-body").classList.toggle("is-off", !$("#ab-enabled").checked);
+    $("#ab-keep-field").hidden = $("#ab-mode").value === "thin";
+    $("#ab-thin-hint").hidden = $("#ab-mode").value !== "thin";
     $("#ab-hour-label").textContent = Number($("#ab-every").value) >= 24 ? "Time of day" : "First one at";
     renderDrives();
 
@@ -651,16 +654,19 @@
       drive_id: $("#ab-drive").value || null,
       every_hours: Number($("#ab-every").value),
       hour: Number($("#ab-hour").value),
-      keep: Number($("#ab-keep").value),
+      keep: Number($("#ab-keep").value) || 14,
+      thin: $("#ab-mode").value === "thin",
       timezone: $("#ab-tz").value.trim() || "UTC",
     };
   }
 
-  for (const id of ["#ab-enabled", "#ab-drive", "#ab-every", "#ab-hour", "#ab-keep", "#ab-tz"]) {
+  for (const id of ["#ab-enabled", "#ab-drive", "#ab-every", "#ab-hour", "#ab-keep", "#ab-mode", "#ab-tz"]) {
     $(id).addEventListener("change", () => {
       abDirty = true;
       $("#ab-body").classList.toggle("is-off", !$("#ab-enabled").checked);
       $("#ab-hour-label").textContent = Number($("#ab-every").value) >= 24 ? "Time of day" : "First one at";
+      $("#ab-keep-field").hidden = $("#ab-mode").value === "thin";
+      $("#ab-thin-hint").hidden = $("#ab-mode").value !== "thin";
     });
   }
   $("#ab-refresh").addEventListener("click", (e) => lookForDrives(e.currentTarget));

@@ -234,3 +234,10 @@ def test_plan_is_part_of_a_backup_but_the_log_is_not(run_app, pi):
     assert h.client.post("/api/restore", content=z.content, headers={"content-type": "application/zip"}).status_code == 200
     p = h.client.get("/api/autobackup").json()["plan"]
     assert (p["enabled"], p["every_hours"], p["hour"], p["keep"]) == (True, 12, 5, 7)
+
+
+def test_plan_remembers_the_spread_over_time_choice():
+    from app.usbbackup import Plan
+    p = Plan.from_dict(dict(enabled=False, every_hours=1, hour=0, timezone="UTC", keep=14, thin=True))
+    assert p.thin is True and Plan.from_dict(p.to_dict()).thin is True
+    assert Plan.from_dict(dict(enabled=False)).thin is False        # plans saved before this existed

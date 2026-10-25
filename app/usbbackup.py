@@ -56,12 +56,14 @@ class Plan:
     hour: int = 0                  # time of day, 0-23, in `timezone`
     timezone: str = "UTC"
     keep: int = 14
+    thin: bool = False             # keep backups spread over time (1 h, 2 h, 4 h ... 2 years) instead of the newest `keep`
     anchor: str = ""               # first day of a plan longer than a day, yyyy-mm-dd
 
     def to_dict(self) -> dict:
         return {
             "enabled": self.enabled, "drive": self.drive, "every_hours": self.every_hours,
-            "hour": self.hour, "timezone": self.timezone, "keep": self.keep, "anchor": self.anchor,
+            "hour": self.hour, "timezone": self.timezone, "keep": self.keep, "thin": self.thin,
+            "anchor": self.anchor,
         }
 
     @property
@@ -96,7 +98,7 @@ class Plan:
                 date.fromisoformat(anchor)
             except ValueError:
                 anchor = ""
-        return cls(bool(d.get("enabled", False)), drive, every, hour, tz, keep, anchor)
+        return cls(bool(d.get("enabled", False)), drive, every, hour, tz, keep, bool(d.get("thin", False)), anchor)
 
     # ---- schedule ---------------------------------------------------------------------
 
@@ -308,7 +310,7 @@ class AutoBackup:
                 except Exception:  # noqa: BLE001
                     log.exception("automatic backup couldn't be built")
                     raise BridgeError("The backup couldn't be made. See the log on the Pi.") from None
-                ans = await self.bridge.ask(f"copy {p.drive['id']} {name} {p.keep}", COPY_TIMEOUT)
+                ans = await self.bridge.ask(f"copy {p.drive['id']} {name} {'thin' if p.thin else p.keep}", COPY_TIMEOUT)
                 if not ans.get("ok"):
                     raise BridgeError(str(ans.get("message") or "The copy failed."))
                 res.update(ok=True, file=name, bytes=int(ans.get("bytes") or 0),

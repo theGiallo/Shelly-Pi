@@ -258,10 +258,18 @@
             <select id="ab-hour"></select>
           </div>
           <div class="field">
-            <label for="ab-keep">Backups to keep</label>
+            <label for="ab-mode">Which backups to keep</label>
+            <select id="ab-mode">
+              <option value="last">The newest ones</option>
+              <option value="thin">Spread over time</option>
+            </select>
+          </div>
+          <div class="field" id="ab-keep-field">
+            <label for="ab-keep">How many</label>
             <input id="ab-keep" type="number" min="1" max="3650" step="1" inputmode="numeric">
           </div>
         </div>
+        <p class="hint" id="ab-thin-hint" hidden>Recent backups are kept close together and older ones further apart: about one every hour, 2 hours, 4 hours, 8 hours, then every day, 2 days, 4 days, 8 days, 16 days, month, 2 months, 4 months and so on, up to 2 years. That is around 30 files, however often you back up. The Pi decides this by the time in each file name, and only touches files named like its own backups.</p>
         <div class="field">
           <label for="ab-tz">Time zone</label>
           <input id="ab-tz" type="text" maxlength="64" list="t-zones" autocomplete="off" placeholder="Europe/Rome">

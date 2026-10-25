@@ -112,3 +112,56 @@ def test_names_with_the_app_version_are_backups_too(helper):
         "shelly-pi_2026-01-02_00-00-00_v0.1.4.zip", "shelly-pi_2026-01-03_00-00-00_vX.zip", new]
     bad = helper("c2 copy 1234-ABCD shelly-pi_2026-10-17_00-00-00_v1/../x.zip 2")
     assert bad["ok"] is False
+
+
+def _name(dt):
+    return f"shelly-pi_{dt:%Y-%m-%d_%H-%M-%S}.zip"
+
+
+def test_thinned_keeps_the_newest_and_spreads_the_rest(helper):
+    from datetime import datetime, timedelta
+    folder = helper.drive / "shelly-pi-backups"
+    folder.mkdir()
+    end = datetime(2026, 10, 17, 12, 0, 0)
+    for h in range(1, 24 * 40):                      # hourly for 40 days
+        (folder / _name(end - timedelta(hours=h))).write_text("old")
+    (folder / "notes.txt").write_text("mine")
+    (helper.bridge / "outgoing" / _name(end)).write_bytes(b"z" * 100)
+    r = helper(f"t1 copy 1234-ABCD {_name(end)} thin")
+    assert r["ok"] is True and r["removed"] > 900
+    kept = sorted(p.name for p in folder.iterdir() if p.name.startswith("shelly-pi_"))
+    assert _name(end) in kept and (folder / "notes.txt").exists()
+    assert _name(end - timedelta(hours=1)) in kept   # the last few hours stay hourly
+    assert 15 <= len(kept) <= 45
+    ages = sorted((end - datetime.strptime(n[10:29], "%Y-%m-%d_%H-%M-%S")).total_seconds() / 3600 for n in kept)
+    for target in (1, 2, 4, 8, 24, 48, 96, 192, 384):     # something within about a window of each
+        assert any(target * 0.5 <= a <= target * 2 for a in ages), (target, ages)
+
+
+def test_thinned_drops_what_is_older_than_two_years(helper):
+    folder = helper.drive / "shelly-pi-backups"
+    folder.mkdir()
+    (folder / "shelly-pi_2024-01-01_00-00-00.zip").write_text("ancient")
+    (folder / "shelly-pi_2026-09-01_00-00-00.zip").write_text("recent")
+    (helper.bridge / "outgoing" / NAME).write_bytes(b"z" * 100)
+    r = helper(f"t2 copy 1234-ABCD {NAME} thin")
+    assert r["ok"] is True
+    left = sorted(p.name for p in folder.iterdir())
+    assert "shelly-pi_2024-01-01_00-00-00.zip" not in left and "shelly-pi_2026-09-01_00-00-00.zip" in left
+
+
+def test_thinned_steady_state_when_run_every_hour(helper):
+    """The real use: one backup an hour for weeks. Nothing may fall out of the series."""
+    from datetime import datetime, timedelta
+    folder = helper.drive / "shelly-pi-backups"
+    folder.mkdir()
+    t = datetime(2026, 1, 1, 0, 0, 0)
+    for _ in range(24 * 9):
+        t += timedelta(hours=1)
+        (helper.bridge / "outgoing" / _name(t)).write_bytes(b"z")
+        assert helper(f"s copy 1234-ABCD {_name(t)} thin")["ok"] is True
+    kept = sorted(p.name for p in folder.iterdir())
+    ages = sorted((t - datetime.strptime(n[10:29], "%Y-%m-%d_%H-%M-%S")).total_seconds() / 3600 for n in kept)
+    assert len(kept) <= 30
+    for target in (1, 2, 4, 8, 24, 48, 96):
+        assert any(target * 0.5 <= a <= target * 2 for a in ages), (target, ages)
