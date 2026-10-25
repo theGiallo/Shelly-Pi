@@ -72,6 +72,11 @@
       <label for="edit-enabled">Monitor this plug
         <span class="hint"><br>Turn this off to stop reading it. Its history is kept.</span></label>
     </div>
+    <div class="field check">
+      <input id="edit-confirm" type="checkbox">
+      <label for="edit-confirm">Ask before switching this plug
+        <span class="hint"><br>Recommended when something that must not lose power is plugged in, like a computer. Turn it off for things like a lamp.</span></label>
+    </div>
     <div class="dialog-actions">
       <button type="button" class="btn danger" id="edit-remove-open">Remove plug&hellip;</button>
       <div class="right">
@@ -86,6 +91,18 @@
         <label for="remove-purge">Also delete its history</label>
       </div>
       <button type="button" class="btn danger" id="remove-confirm">Remove plug</button>
+    </div>
+  </dialog>
+
+  <dialog id="switch-dialog" aria-labelledby="switch-title">
+    <h2 id="switch-title">Switch off?</h2>
+    <p id="switch-text"></p>
+    <div class="dialog-actions">
+      <span></span>
+      <div class="right">
+        <button type="button" class="btn" id="switch-cancel">Cancel</button>
+        <button type="button" class="btn primary" id="switch-go">Switch off</button>
+      </div>
     </div>
   </dialog>
 

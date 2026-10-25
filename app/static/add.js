@@ -120,6 +120,7 @@
         if (!p.ssid) toast("Set the router's Wi-Fi name and password in Settings first.");
       }
       $("#ssid-name").textContent = p.ssid;
+      $("#back-ssid").textContent = p.mode === "router" ? `your router's Wi-Fi (${p.ssid})` : `the Pi's Wi-Fi (${p.ssid})`;
       $("#fb-ssid").value = p.ssid;
       $("#fb-pass").value = p.password;
       $("#provision-link").href = p.provision_url;

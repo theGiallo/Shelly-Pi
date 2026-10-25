@@ -81,6 +81,7 @@ class DevicePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=40)
     room: str | None = Field(default=None, max_length=40)
     enabled: bool | None = None
+    confirm_switch: bool | None = None   # ask in the dashboard before switching this plug
 
 
 class AdoptBody(BaseModel):
@@ -238,6 +239,7 @@ def create_app(
         return {
             "id": dev["id"], "name": dev["name"], "room": dev["room"], "model": dev["model"],
             "ip": dev["ip"], "mac": dev["mac"], "enabled": dev["enabled"],
+            "confirm_switch": dev["confirm_switch"],
             "live": live, "energy_since_wh": energy, "cost_since": cost,
         }
 

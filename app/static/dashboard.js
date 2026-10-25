@@ -284,8 +284,28 @@
 
   // ---- switching -----------------------------------------------------------------------
 
+  const swDlg = $("#switch-dialog");
+
+  function askSwitch(dev, target) {
+    return new Promise((resolve) => {
+      $("#switch-title").textContent = target ? `Switch on ${dev.name}?` : `Switch off ${dev.name}?`;
+      $("#switch-text").textContent = target
+        ? "Whatever is plugged into it gets power."
+        : "Whatever is plugged into it loses power right away.";
+      $("#switch-go").textContent = target ? "Switch on" : "Switch off";
+      let answer = false;
+      const done = (yes) => () => { answer = yes; swDlg.close(); };
+      $("#switch-go").onclick = done(true);
+      $("#switch-cancel").onclick = done(false);
+      swDlg.addEventListener("close", () => resolve(answer), { once: true });   // Esc counts as Cancel
+      swDlg.showModal();
+      $("#switch-cancel").focus();
+    });
+  }
+
   async function onSwitch(dev, btn) {
     const target = btn.getAttribute("aria-checked") !== "true";
+    if (dev.confirm_switch !== false && !(await askSwitch(dev, target))) return;
     btn.disabled = true;
     btn.setAttribute("aria-checked", String(target));
     try {
@@ -552,6 +572,7 @@
     $("#edit-name").value = dev.name;
     $("#edit-room").value = dev.room || "";
     $("#edit-enabled").checked = dev.enabled;
+    $("#edit-confirm").checked = dev.confirm_switch !== false;
     $("#remove-box").hidden = true;
     $("#remove-purge").checked = false;
     $("#remove-name").textContent = dev.name;
@@ -567,7 +588,8 @@
     if (!name) { toast("Give the plug a name."); $("#edit-name").focus(); return; }
     try {
       await api(`/api/devices/${editing.id}`, {
-        method: "PATCH", body: { name, room: $("#edit-room").value.trim(), enabled: $("#edit-enabled").checked },
+        method: "PATCH", body: { name, room: $("#edit-room").value.trim(), enabled: $("#edit-enabled").checked,
+          confirm_switch: $("#edit-confirm").checked },
       });
       dlg.close();
       await refresh();

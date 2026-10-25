@@ -155,3 +155,19 @@ def test_changes_need_the_custom_header_but_reading_does_not(run_app):
             assert r.status_code == 403, (method, path)
     finally:
         bare.close()
+
+
+def test_database_from_before_confirm_switch_gets_the_column(tmp_path):
+    import sqlite3
+    from app.db import Database
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE devices(id INTEGER PRIMARY KEY AUTOINCREMENT, mac TEXT NOT NULL UNIQUE, name TEXT NOT NULL,"
+                " room TEXT NOT NULL DEFAULT '', model TEXT NOT NULL DEFAULT '', shelly_id TEXT NOT NULL DEFAULT '',"
+                " ip TEXT NOT NULL, switch_id INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1,"
+                " added_ts INTEGER NOT NULL, last_energy_wh REAL)")
+    con.execute("INSERT INTO devices(mac, name, ip, added_ts) VALUES('aa', 'PC', '1.2.3.4', 1)")
+    con.commit()
+    con.close()
+    db = Database(path)
+    assert db.list_devices()[0]["confirm_switch"] is True          # existing plugs ask, to be safe

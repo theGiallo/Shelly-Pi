@@ -93,6 +93,9 @@ def test_full_flow_adopt_poll_switch_history(run_app, plugs):
     assert h.client.post(f"/api/devices/{dev_id}/switch", json={}).json()["output"] is False
     assert plug.output is False
     assert h.client.patch(f"/api/devices/{dev_id}", json={"name": "Lamp", "room": "Hall"}).json()["name"] == "Lamp"
+    assert h.client.get("/api/state").json()["devices"][0]["confirm_switch"] is True       # asked by default
+    assert h.client.patch(f"/api/devices/{dev_id}", json={"confirm_switch": False}).json()["confirm_switch"] is False
+    assert h.client.get("/api/state").json()["devices"][0]["confirm_switch"] is False
     assert device(h, dev_id)["name"] == "Lamp"
     assert h.client.delete(f"/api/devices/{dev_id}", params={"purge": "true"}).status_code == 200
     assert h.client.get("/api/state").json()["devices"] == []

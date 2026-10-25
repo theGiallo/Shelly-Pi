@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS devices(
   ip TEXT NOT NULL,
   switch_id INTEGER NOT NULL DEFAULT 0,
   enabled INTEGER NOT NULL DEFAULT 1,
+  confirm_switch INTEGER NOT NULL DEFAULT 1,
   added_ts INTEGER NOT NULL,
   last_energy_wh REAL
 );
@@ -106,6 +107,10 @@ class Database:
         self._conn.execute("PRAGMA temp_store=MEMORY")
         self._conn.execute("PRAGMA busy_timeout=15000")
         self._conn.executescript(SCHEMA)
+        # Databases made before a column existed (including backups of them) get it added.
+        have = {r[1] for r in self._conn.execute("PRAGMA table_info(devices)")}
+        if "confirm_switch" not in have:
+            self._conn.execute("ALTER TABLE devices ADD COLUMN confirm_switch INTEGER NOT NULL DEFAULT 1")
         self._conn.commit()
 
     def snapshot(self, dest: Path | str) -> None:
@@ -165,17 +170,18 @@ class Database:
 
     _DEV_COLS = (
         "id, mac, name, room, model, shelly_id, ip, switch_id, enabled, "
-        "added_ts, last_energy_wh"
+        "added_ts, last_energy_wh, confirm_switch"
     )
 
     @staticmethod
     def _dev(row: tuple) -> dict[str, Any]:
         keys = (
             "id", "mac", "name", "room", "model", "shelly_id", "ip",
-            "switch_id", "enabled", "added_ts", "last_energy_wh",
+            "switch_id", "enabled", "added_ts", "last_energy_wh", "confirm_switch",
         )
         d = dict(zip(keys, row))
         d["enabled"] = bool(d["enabled"])
+        d["confirm_switch"] = bool(d["confirm_switch"])
         return d
 
     def list_devices(self) -> list[dict[str, Any]]:
@@ -207,10 +213,11 @@ class Database:
         return dev
 
     def update_device(self, device_id: int, **fields: Any) -> dict[str, Any] | None:
-        allowed = {"name", "room", "model", "shelly_id", "ip", "switch_id", "enabled"}
+        allowed = {"name", "room", "model", "shelly_id", "ip", "switch_id", "enabled", "confirm_switch"}
         sets = {k: v for k, v in fields.items() if k in allowed}
-        if "enabled" in sets:
-            sets["enabled"] = 1 if sets["enabled"] else 0
+        for flag in ("enabled", "confirm_switch"):
+            if flag in sets:
+                sets[flag] = 1 if sets[flag] else 0
         if sets:
             cols = ", ".join(f"{k}=?" for k in sets)
             self.execute(f"UPDATE devices SET {cols} WHERE id=?", (*sets.values(), device_id))

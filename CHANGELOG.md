@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Switching a plug on or off from the dashboard now asks first ("Switch off My PC?"). Each plug has an **Ask before switching this plug** setting in its edit dialog, on by default, for things like a lamp where you'd rather not be asked.
+- Adding a plug: the page now says that the plug's reply (`restart_required: false`) is normal, and reminds you to put your phone back on the Pi's Wi-Fi (or your router's) before waiting for the plug to appear.
+
 ## 0.1.7
 
 - The update file is now compressed (`shelly-pi-image_v<version>.tar.gz`, about a third of the size). The Update page unpacks it in your browser and sends the plain image to the Pi, and the Windows installer unpacks it on your PC, so the Pi never has to. A plain `.tar` still works.

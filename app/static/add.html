@@ -58,6 +58,7 @@
             <div class="qr-side">
               <p>Scan this code with your phone's camera and open the link. It tells the plug to join <strong id="ssid-name">the Pi's network</strong>.</p>
               <p class="note">The code contains the Wi-Fi password. Keep it out of screenshots.</p>
+              <p class="note">The plug answers with a line like <code>restart_required: false</code>. That is the normal reply.</p>
               <p><a id="provision-link" href="#">Using your phone for this page? Open the link directly.</a></p>
             </div>
           </div>
@@ -74,6 +75,7 @@
         <div class="step-n" aria-hidden="true">3</div>
         <div class="body">
           <h2>Wait for the plug to appear</h2>
+          <p class="note" id="back-note"><strong>Reconnect first.</strong> Your phone is still on the plug's own network. Switch it back to <span id="back-ssid">the Pi's Wi-Fi</span>, or this page can't see the plug join.</p>
           <div class="status-line" id="scan-status" role="status"><span class="spinner" aria-hidden="true"></span><span id="scan-text">Looking for new plugs on the Pi's Wi-Fi&hellip;</span></div>
           <div class="cands" id="cands"></div>
           <div id="net-scan" hidden>
