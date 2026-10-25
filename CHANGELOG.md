@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.8
 
 - Switching a plug on or off from the dashboard now asks first ("Switch off My PC?"). Each plug has an **Ask before switching this plug** setting in its edit dialog, on by default, for things like a lamp where you'd rather not be asked.
 - USB backups: a new choice, **Spread over time**, instead of keeping the newest N. Recent backups stay close together and older ones further apart (about every 1, 2, 4, 8 hours, then 1, 2, 4, 8, 16, 32 days and so on, up to 2 years), around 30 files in all however often you back up.
