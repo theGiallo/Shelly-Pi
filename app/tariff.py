@@ -33,7 +33,7 @@ GRID = 15  # minutes
 META_KEY = "tariff"
 TIME_RE = re.compile(r"^(\d{1,2}):(\d{2})$")
 MAX_SLOTS = 12
-MAX_CHANGES = 60
+MAX_CHANGES = 1000
 MAX_PRICE = 1000.0  # per kWh, in whatever currency; just a typo guard
 
 

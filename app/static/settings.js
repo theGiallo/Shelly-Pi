@@ -203,7 +203,7 @@
     }));
     $("#t-period").value = String(cur);
     $("#t-delperiod").hidden = cur === 0;
-    $("#t-addperiod").disabled = periods.length >= 61;
+    $("#t-addperiod").disabled = periods.length >= 1001;
   }
 
   function showPeriod() {
